@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>飞书本地归档</title><link rel="stylesheet" href="workbench.css"></head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#top"><span class="brand-mark">归</span><span>本地归档<small>FEISHU ARCHIVE</small></span></a>
+    <div class="nav-label">工作空间</div><a class="nav-link active" href="#top"><span>▣</span> 归档工作台</a><a class="nav-link" href="#coverage"><span>◷</span> 能力与进度</a><a class="nav-link" href="#guide"><span>☷</span> 使用说明</a>
+    <div class="sidebar-bottom"><span class="dot"></span> 数据留在你的电脑<br><small>0.1.0 · 开发版</small></div>
+  </aside>
+  <main id="top">
+    <header class="topbar"><span>工作空间 <span class="separator">/</span> 当前页面归档</span><span class="pill">本地优先</span></header>
+    <section class="hero"><div><p class="eyebrow">YOUR KNOWLEDGE, KEPT CLOSE.</p><h1>把文档，留在本地。</h1><p class="lede">保存已加载的内容与结构，清楚记录每一个尚未验证的部分。</p></div><div class="edition">开发预览<span>01</span></div></section>
+    <section id="environment-note" class="banner" hidden></section>
+    <section class="source-card">
+      <div class="section-label"><span class="step">1</span> 采集来源 <span id="source-badge" class="badge">等待连接</span></div>
+      <div class="source-main"><span class="document-icon">▤</span><div><h2 id="source-title">打开飞书页面，点击扩展图标</h2><p id="source-description">每次只读取你主动选择的页面。</p></div><button id="return-source" class="button quiet" disabled>回到源页面 ↗</button></div>
+      <div class="source-actions"><button id="capture" class="button primary" disabled>采集当前页面 <span>→</span></button><button id="open-archive" class="button secondary">打开本地归档</button><input id="archive-file" type="file" accept=".json,.fdocpack.json" hidden><div class="demo-actions"><span>试用合成样本</span><button id="demo-document" class="text-button">文档</button><button id="demo-sheet" class="text-button">表格</button></div></div>
+      <p id="task-status" class="task-status" role="status" aria-live="polite">准备就绪后即可开始。采集不会修改源内容。</p>
+    </section>
+    <div class="workspace-grid">
+      <section class="result-card"><div class="section-label"><span class="step">2</span> 采集结果 <span id="result-badge" class="badge neutral">尚未采集</span></div>
+        <div id="empty-result" class="empty-state"><div class="empty-art">▧</div><h3>先带回一份文档</h3><p>内容数量、结构预览和采集缺口<br>会在这里逐项呈现。</p></div>
+        <div id="result" hidden><h2 id="result-title"></h2><div id="metrics" class="metrics"></div><div class="preview-heading"><h3>结构预览</h3><span id="preview-label"></span></div><div id="preview" class="preview"></div></div>
+      </section>
+      <section class="export-card"><div class="section-label"><span class="step">3</span> 保存到本地</div><div class="archive-illustration"><span>{ }</span><small>.fdocpack.json</small></div><h3>结构快照，随时带走</h3><p>保留已采集内容、块关系与缺口报告。可在此工作台重新打开。</p><button id="download-json" class="button primary full" disabled>下载部分归档 ↓</button><button id="download-html" class="button secondary full" disabled>下载离线结构预览</button><p class="export-note">下载后请在 Chrome 下载列表确认。<br>关闭此页前，请保存需要保留的快照。</p><div class="honest-note"><strong>PENDING · 保真尚未验收</strong><p>当前文件不包含图片、附件和嵌入对象的完整资源。原排版及飞书回导尚未验证，请保留源文件。</p></div></section>
+    </div>
+    <section id="issues-section" class="issues-card" hidden><div class="section-label">缺口与未验证项</div><ul id="issues"></ul></section>
+    <section id="coverage" class="coverage"><div class="section-heading"><div><p class="eyebrow">BUILDING IN THE OPEN</p><h2>每种能力，都有清楚的边界。</h2></div><span class="badge neutral">首版仍在开发</span></div><div class="capabilities"><article><span class="type-symbol">Aa</span><h3>文档</h3><p>已加载块与正文、富文本编码、父子关系。复杂布局与资源待补齐。</p><span class="state-dot">结构采集开发版</span></article><article><span class="type-symbol">▦</span><h3>电子表格</h3><p>已加载单元格、公式、样式字段、合并与尺寸。加载覆盖仍需验证。</p><span class="state-dot">结构采集开发版</span></article><article><span class="type-symbol">▱</span><h3>幻灯片</h3><p>保留在首版范围内。等待真实样本验证页面及对象结构。</p><span class="state-dot pending">适配器待接入</span></article></div></section>
+    <section id="guide" class="guide"><h2>使用这份开发版</h2><ol><li>在 Chrome 扩展管理页启用开发者模式，加载解压后的 <code>extension</code> 文件夹。</li><li>打开获准保存的飞书文档或表格。表格请先逐张打开需要保存的工作表，再点击扩展图标。</li><li>在此页采集，检查缺口，下载归档。切换工作表不等于完整加载；当前版本始终保留完整性待验证标记。</li><li>用“打开本地归档”检查文件可读性。完整首版还需资源本地化、Office 文件和辅助恢复验收。</li></ol></section>
+    <footer><span>保留知识，也保留证据。</span><span>无后台上传 · 无远程脚本 · 按次采集</span></footer>
+  </main><script type="module" src="workbench.mjs"></script>
+</body></html>

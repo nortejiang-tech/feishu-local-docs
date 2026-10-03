@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "飞书本地归档 · 开发版",
+  "version": "0.1.0",
+  "description": "将当前飞书页面中已加载的文档和表格模型保存到本地，并列出尚未验证的完整性与资源缺口。",
+  "minimum_chrome_version": "106",
+  "permissions": ["activeTab", "scripting"],
+  "action": {"default_title": "归档当前飞书页面"},
+  "background": {"service_worker": "background.mjs", "type": "module"},
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'; img-src 'self' data:; base-uri 'none'"
+  }
+}

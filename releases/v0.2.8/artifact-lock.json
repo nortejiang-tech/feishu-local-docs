@@ -1,0 +1,491 @@
+{
+  "version": "0.2.8",
+  "signature": "local ad-hoc; not notarized",
+  "files": [
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Info.plist",
+      "bytes": 1445,
+      "sha256": "c1d5363fb04ea917b83f4ac4f846497c224394330522dd94a2f7e1f6f1a22d27"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/MacOS/LocalDocs",
+      "bytes": 202432,
+      "sha256": "fb24d435928611c7f913cb50a5cdad95c432a5bb06376f0f8571a5c6a342113e"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/ChromeExtension/background.js",
+      "bytes": 129582,
+      "sha256": "6b4edda20be20a86da3d5cace5acd97c2fd9b80baaa882679670ed3157430ba6"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/ChromeExtension/manifest.json",
+      "bytes": 1047,
+      "sha256": "1c2d22d36920af5cdbf6e9522cf6e503c87d6de6cecb8d258a038e1cdb34177d"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/ChromeExtension/popup.css",
+      "bytes": 471,
+      "sha256": "b9556c3bbab37405fcf2225d0cfc2266312f2dc76d4799381f9288103d023076"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/ChromeExtension/popup.html",
+      "bytes": 424,
+      "sha256": "8bfbfab660861a54560af66d9d050630be7ee3ca28274ebb20a637bcf56ba1b6"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/ChromeExtension/popup.js",
+      "bytes": 796,
+      "sha256": "d8253fd7bf179acaa22957b9ef472f0f7e82c113e18200fa68c2d7d8649a96c4"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/THIRD-PARTY-NOTICES.txt",
+      "bytes": 766445,
+      "sha256": "6238039e5014f229d6e1e6ab84be9785ad26a213ff91f2f4a75b7598762e68af"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/native-host",
+      "bytes": 71,
+      "sha256": "6a75e25e50a08b2ed9221dad5b417dc4bc4ed049b3b7bbde02295162a5404fc7"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/af-DK_CjRn6-CZxsvT2y.js",
+      "bytes": 179532,
+      "sha256": "64444f1b04dc073f3f18373562ada6b2a4488622473107f20cbc7fdde2a3ab61"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/as-BPtSu6VN-F6qyW8uH.js",
+      "bytes": 623,
+      "sha256": "f38c1478b3f9294230fe1169dc56fad6225b30b4c6b876ab49a69052b000e44d"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/be-CrQ0smca-BYVdQd18.js",
+      "bytes": 27828,
+      "sha256": "c90eaaf2d0ea76dbf230c0ba18a587a37e7f8caf54227cccb0355e631ce9fb77"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/bg-CrQqGwni-B5xv6TfF.js",
+      "bytes": 56922,
+      "sha256": "b2b24c07056b67988e1a4725cba3d331c64a188c2a9ba6755cd493994714a414"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/bn-NCLZcWHi-BGS6_hxH.js",
+      "bytes": 623,
+      "sha256": "3518f2276548c183c0a3a1fc708c493391ab74e351d66d04101cc1731da1869c"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/ca-SUf6Y2Om-DrduLk3W.js",
+      "bytes": 7819,
+      "sha256": "7de5e0529c0ae4d87c83076e4da98e5fa756e6e388653e6fd4b0066401387fb9"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/cop-C3sk0IUo-Dw82IjCr.js",
+      "bytes": 6886,
+      "sha256": "889300c5376e507b62419f13b2b92d9dfb30ac8e5de445dd65f0e4926669167d"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/cs-CmAteokq-BI5q4aVA.js",
+      "bytes": 39755,
+      "sha256": "aa1a2fae1449398898317b9740de9c18a039a14fbe6551aab1fa23a44d87b26c"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/cu-CBUlrW6Y-BRCy0UAr.js",
+      "bytes": 168797,
+      "sha256": "3a8c95e64ec987c433936481460ca1bb88d1e16cd3ff234c46ce2837b0bff97e"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/cy-BBPa6z2x-Cag4snSk.js",
+      "bytes": 80194,
+      "sha256": "096af5b54783605d57b17800aa4c34b9cd506e6557a9ab1100b89f492aafa7a1"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/da-CCDXfXtG-BWliw5hZ.js",
+      "bytes": 12718,
+      "sha256": "19b36177b14fa9b85fe4587943eb1d881686e3304f8d55b5a2bac9cdfc157d5b"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/de-1901-CWoAOigE-BlgpCKr2.js",
+      "bytes": 270036,
+      "sha256": "1c85e9488b8055ea98aab710efd8dc5d6503e4e86d047e616a506862e89ecd77"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/de-1996-BL6awyxG-BjfWxQKM.js",
+      "bytes": 266936,
+      "sha256": "f24da8f9aa05c51676c03eccee2861243595631850445e0555ca5cbf761e3b25"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/de-ch-1901-hVThVHVb-_Xg3_np3.js",
+      "bytes": 264335,
+      "sha256": "8723ffccafbd8900281c392f23c5f694490f73f1f3e5b22b62753a86115d464a"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/el-monoton-D3aKqTz2-CuqNQIvE.js",
+      "bytes": 4868,
+      "sha256": "5964f9a177acaeb272d2175419153344253d4e2a5b0fbe731c5bb3c421ea56fe"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/el-polyton-ogVWcTzh-B5J5pGHR.js",
+      "bytes": 17623,
+      "sha256": "f30059c0460a08192882b18e5c56c1837077ee2565bef40414c517514ebd8b8d"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/en-gb-B7Al27b_-COWGBqwJ.js",
+      "bytes": 105376,
+      "sha256": "c59129c73a923bfe55609a04ec871f83b3ce66a4e8da2e5bb28430a0304d4f03"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/es-DcaaHPU_-CnHE1eri.js",
+      "bytes": 44127,
+      "sha256": "70351381efe18cd54e1b6365ed6883b1d830d84ecf742d4f8e17588a39cfb7cd"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/et-B_spaleu-H7jVbiHv.js",
+      "bytes": 47206,
+      "sha256": "b40a821a580cb5d080747b7f30fc3afb8ee4edac813d69e41907b84bf00f2b67"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/eu-Ctv_kq9Z-D1jw9zt8.js",
+      "bytes": 1512,
+      "sha256": "a005fa6847104e7cba23c1e6c0810f72799af96fbbc0cda1fd4443191a95d14c"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/fi-RW5VB8Yp-mParSSSy.js",
+      "bytes": 3189,
+      "sha256": "5fe6f8bf27c925dcae889bd450f9776ec2ff620e545ebece80c90d64674bf022"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/fr-BC2onEz9-Dc1KqFHa.js",
+      "bytes": 24133,
+      "sha256": "d2da8762a415ff2983b2fda02dbbd62dae540df30551165b735bf4259e3d3e14"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/fur-AC12wySk-tJv2icDr.js",
+      "bytes": 3899,
+      "sha256": "8e247bb736fb9239d6a9e72cb4a32d03e2af3550044e01992392bc430e0d8e17"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/ga-Cn6LkudM-CDuqe3gr.js",
+      "bytes": 82061,
+      "sha256": "f1bf1ac32d36bb78b56b11c1fe0c8d971a21d248c6efb380f28d19eca59db6b0"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/gl-DZGc-K_G-D9_oxkqv.js",
+      "bytes": 33639,
+      "sha256": "5a7bf76a1989c5096c6fe3748729372051206e6fa6745fda8290f7bc5e366ba2"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/grc-DOlGgO8T-DANBReIg.js",
+      "bytes": 71611,
+      "sha256": "6be2c70d1e5e80275b214f73ecc6bed83ded3d36fae1d22bbde760747f3175e1"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/gu-Bjl0l-cf-COW9d1dt.js",
+      "bytes": 575,
+      "sha256": "b21419cfd4c2970afdb02bf86035b0f74571a12821942010ec8a3622ee3ab3f2"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/hi-DsAaTPCC-CiihDo6Q.js",
+      "bytes": 607,
+      "sha256": "cf66979cd24b6dd8ab549a41e0dc81d040fbbd07a96855f40b9976ff72a6a6f1"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/hr-DT1SBBes-D_vEJhf2.js",
+      "bytes": 11360,
+      "sha256": "b57ca0b4e0b895136e5031d6170b9deced123ca60af6bd68ff43a055062a747f"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/hsb-DC_ITc1e-kb5QeNH1.js",
+      "bytes": 13954,
+      "sha256": "643f95e788e595932a58e2219c07b01ba287384965af75c47121d93d5be111d6"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/html-export-Bnx9MnRU.js",
+      "bytes": 16131,
+      "sha256": "49f2102b39eb9ec5061448da4499008aea6cd23b7f9dade0648bfa9f0e9a827e"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/hu-DVk7Y_ka-Ct1fysVO.js",
+      "bytes": 765402,
+      "sha256": "c64953510e8fb62c97a09385b8fab1f7875292f580d058c7b6ebc2c115cf5cc9"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/hy-e995ysyO-Cjfrs2ZM.js",
+      "bytes": 11931,
+      "sha256": "7317db9acff410a62390e3a6af8ea4115dce0313e18b723f1d303da61fbdb8e4"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/ia-Cr4TJH0c-B1i9kDPT.js",
+      "bytes": 6486,
+      "sha256": "f89d957a91e09ba6507906795938db76fff09a5a2a67decee9d59bcddd6bd5ed"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/id-DifDyWg9-C3Hzl2m4.js",
+      "bytes": 2434,
+      "sha256": "6d9e56f7dc42978594aaaa4a53482112afd08d83f5a3ee787ee730054a660668"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/index-BlV1JMb8.js",
+      "bytes": 7120953,
+      "sha256": "250e0fc2b137d8afef8ea175a105c619e995ce307124d73b29ddc595d92fd55a"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/index-hd6EoF6K.css",
+      "bytes": 142248,
+      "sha256": "2999995a9dfcb7bf1a93a52990453025778b3910834e2b24ee91d92e622f1192"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/is-BT8UVRze-DWEBuJpb.js",
+      "bytes": 48407,
+      "sha256": "63cb2f5b5f26d66d381ac2873f292d530da5fa03a705df0ea32cc982e03b1711"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/it-Bt_Meacx-HiFRunf5.js",
+      "bytes": 3624,
+      "sha256": "1f69316bc40b4651a18c2431fb9b92cd7b7d4a895b8cabb5814b83c0dd8ed35c"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/ka-jyoLzyDE-BU45urC7.js",
+      "bytes": 26186,
+      "sha256": "6f278c88127773f8a989ec3d98746551699e84fecfb1eeb60bba6bd472b67174"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/kmr-Cfwhwuff-DfPyPgkK.js",
+      "bytes": 2729,
+      "sha256": "3c195a4654d9cb48298634758282e81dd01a9c9f3468f84b659e7d13582e3d45"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/kn-C6Lov-DP-BuXzi7S-.js",
+      "bytes": 631,
+      "sha256": "ed635ac15162985207edf95dafa0f1977362114675b034f465d42f1a5c288659"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/la-DuvHjUWw-Bwiuou7l.js",
+      "bytes": 3189,
+      "sha256": "7938c3650dfcaa6b8a957245346c1b2bac477ca06d650e2a7958c132dc60b256"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/la-x-classic-yTyAOQEt-aO_2QO0y.js",
+      "bytes": 8925,
+      "sha256": "ce2fb0992816a7984b99fd73ee98d5cdf301a0d21eb14fcdd939a73d25f53207"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/la-x-liturgic-CXeQb4FY-BpDOy20C.js",
+      "bytes": 22818,
+      "sha256": "3a71834927064535011ef82ee5707e49a17f3f00c1c3d2cb3e634dff99921c2c"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/lt-BBe8DlDF-B3cgXplB.js",
+      "bytes": 14766,
+      "sha256": "ecab7aa29dad0062b5d40dac0fedb3c5668b2d15639f1e8168c05218cb12dd63"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/lv-Q2BBHnzp-CLjYDJHB.js",
+      "bytes": 112674,
+      "sha256": "815fe0552785b87abea51eac3e523ce261cdd47c610e0bbe6eec87b281d5a9cf"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/ml-2xLVYkVY-Ct0js8Am.js",
+      "bytes": 805,
+      "sha256": "aa328bac717846ca6b5cebf46f7d4847d4721bdea05dd780ad9f9274047e0f3a"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/mn-cyrl-lHM4n0oC-DN6sz9R4.js",
+      "bytes": 12149,
+      "sha256": "2ad360f2b55ed566bd3b88ca2978a74d4751afd11d7a1285b17dc2bdebed4086"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/mn-cyrl-x-lmc-3aetruI8-BJqn49ay.js",
+      "bytes": 4822,
+      "sha256": "0c2066fd567e92cda6711c2debd0c021bb3142b3827442811ef2b799ceb49d61"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/mr-CjWJPVmH-DGtESPcG.js",
+      "bytes": 607,
+      "sha256": "2d6f9d7d13f8d678820608b8e39f5150ac1419f35751bec49a257d0ed076ce89"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/mul-ethi-D_CMSMEq-D6ioGuYP.js",
+      "bytes": 3684,
+      "sha256": "43f96a504804a0133a44f6a6c46f16731eefb14c86c95139b0df82500b410cff"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/nb-DI8u59ch-BfDSp4tN.js",
+      "bytes": 341708,
+      "sha256": "ff095ed24f96a35c013bfe52866e1ff18c6a12cdef1a19654a5bbf1e3384dc98"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/nl-BHQJ6Gvn-8_OIBsy0.js",
+      "bytes": 138438,
+      "sha256": "b518bd189a1a8b131eb87c9f1baf5ed892956dd1e90059c97eceb98fd5dfeeda"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/nn-ntZvarUK-BWT83oy8.js",
+      "bytes": 341708,
+      "sha256": "16fc12a59eab4c80925dd56d94c1029fdfe93286e5da4e14190e24cf3eb23712"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/no-B8ItS0F3-Cjg1mxae.js",
+      "bytes": 341691,
+      "sha256": "667e2def26d4a5e4689f763ed953237d5c2cd0656264fa8a2e8b2997364c1605"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/oc-P_i3-xLA-W5_I63nO.js",
+      "bytes": 2555,
+      "sha256": "06ef24b2a9e154bedf8e9d823bdb1811f98ef8f312fb34ff6fbb156d2e0b2b6e"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/office-Nuk-Kt7B.js",
+      "bytes": 1324190,
+      "sha256": "1ffe3ee62fbdd54d722c26470266b8e10324618de32f690ba59b06b01e63da97"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/or-50rxpoq4-Cf5-bcl5.js",
+      "bytes": 567,
+      "sha256": "f9108ade4c0b427e5a20482a9966028ff7ac59bc9201aa41d56c9f7f8b5252e2"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/pa-C54UG8eN-Bj-XExX_.js",
+      "bytes": 527,
+      "sha256": "48ac6ea3344b6d5956e9e5946c6961112b3c51c9e51f34368db173b2feb13d24"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/pi-B9cgjyG1-o9084kBf.js",
+      "bytes": 853,
+      "sha256": "9fb95c6673425a8cd6c61992061b1fb494ac5975dd072ddc2950707cd36dcfaf"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/pl-9fg-ESVt-Bv_p-a9x.js",
+      "bytes": 46089,
+      "sha256": "b67a99f44f704b4f342b0ede914ef8b41c2ee48eb82396e3f8781138489ad8f1"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/pms-BRGfm5gS-DfOt2RSi.js",
+      "bytes": 3375,
+      "sha256": "d0087110cbc8c9210a3b0d05f27010da02921121e570eed7c9dd2b67223970e6"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/pt-Cum2_NUC-CrkeeQaZ.js",
+      "bytes": 2288,
+      "sha256": "d44a822cea8a5e58b3ec8308a38c4b1c6546394577c1f752afacf1d0f49ce5fe"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/rm-C0MIK9N4-CNhvXnnG.js",
+      "bytes": 3668,
+      "sha256": "443b1b62d09edfcebeb37b398757db7962c69fb60e4cb26421f681975449c936"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/ro-0fmdH0HA-Bov_DAVD.js",
+      "bytes": 7266,
+      "sha256": "a5f00862269202aa22b89ce92f1471794d6ee4d0818beb17b9f9f339df5c08c4"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/ru-v4l-ayaq-DLdM0nWP.js",
+      "bytes": 84951,
+      "sha256": "118ed805e40b3e7499a039ddfa121633a3d7ef826c14fa250c9f71e6a5dcf17b"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/sa-CKY9c_Vq-CvBCyoRG.js",
+      "bytes": 9709,
+      "sha256": "ad83ee5c54dae882f988cce3c5b90320b0183ce8206b58dfccf7b4c6e51aa174"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/sh-cyrl-BpCRFOmq-UY09gie6.js",
+      "bytes": 32273,
+      "sha256": "21b9b6ed539adec61240a0ec33ad90eb98945223e1e6c6873b5bebf319eaa8ae"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/sh-latn-sRy4Tuaj-De-tA-2J.js",
+      "bytes": 29560,
+      "sha256": "111cf03ae415880cd123cd92a92ad774c7272b6062176ca4cffb4d8c5fc81a09"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/sk-_iOeDNrQ-DC8Al4lF.js",
+      "bytes": 31691,
+      "sha256": "2cfd916cba5c8b20ff95e24a6e3a6f25354874f852f936418c2216c59a5d3f0d"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/sl-DpiklF-D-B8FnrXi1.js",
+      "bytes": 12599,
+      "sha256": "682e25b0d19bf366e2778735dd34a41163036475eefcb0c89b8b7f02d4dc1c7a"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/sr-cyrl-Dpzrbd0W-yGc0Jz1j.js",
+      "bytes": 31347,
+      "sha256": "779fa1e5a479f0b7d7cbba601a5c89565cb4c6bf31562efa02bf255166499841"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/sv-CFm5y56M-DeQDoAsB.js",
+      "bytes": 56807,
+      "sha256": "6f49a57a6526c9ba1403d292b4db5d9693863abb906fe7ed39ec9d16c68efc6f"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/ta-BcghgTbD-B5_ztYXp.js",
+      "bytes": 709,
+      "sha256": "8ee79e8b38f886871c211e2a4e800d6e7e795753228320f3dcd4bac67a045fc4"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/te-B5Spl2Jk-BjTOzs5s.js",
+      "bytes": 623,
+      "sha256": "c47cfa43eb9b432dba593a3b7e9bf71460c0f1b0e6f689d9ad562cdeba107cd6"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/th-DWX5iPSo-CFfNau1h.js",
+      "bytes": 68620,
+      "sha256": "2f84a29aeae94a76329bd271f292f87a9625f84d86c0364a5db9e9f03c76fa45"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/tk-BMbKB10q-UHPz-lif.js",
+      "bytes": 16959,
+      "sha256": "7155373495d7f2c7ce332e93172f7440923ae251bb8c3e70afde0ad19e37536d"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/tr-CIHIuzqc-DvQDK0dA.js",
+      "bytes": 3965,
+      "sha256": "8100542dff03374bfee78bd816df7f2e3220bf04296004f354bbda5bf76c71f1"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/uk-Dir3oxLs-DGVpthWV.js",
+      "bytes": 63990,
+      "sha256": "cfef314b43a1283cad7952019d10ed6f8eac839b8e35b350a5c85fffca98578f"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/assets/zh-latn-pinyin-BdYb-Ey_-CW52gdb_.js",
+      "bytes": 1276,
+      "sha256": "71266c481f0fc3f94a43064d29f52d421855b39f2e79503eda2763b0c194150a"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/Resources/web/index.html",
+      "bytes": 361,
+      "sha256": "09860b05c11427a0e7fd37a44d5de18fdcb38743ef9c9dfe43a65f1864900332"
+    },
+    {
+      "path": "macOS/本地文档-0.2.8.app/Contents/_CodeSignature/CodeResources",
+      "bytes": 26614,
+      "sha256": "ccbfdc7ebdc17afd1461243f668f5d6612398496838f533d869b9e8d85ec4990"
+    },
+    {
+      "path": "chrome-extension-0.2.8/background.js",
+      "bytes": 129582,
+      "sha256": "6b4edda20be20a86da3d5cace5acd97c2fd9b80baaa882679670ed3157430ba6"
+    },
+    {
+      "path": "chrome-extension-0.2.8/manifest.json",
+      "bytes": 1047,
+      "sha256": "1c2d22d36920af5cdbf6e9522cf6e503c87d6de6cecb8d258a038e1cdb34177d"
+    },
+    {
+      "path": "chrome-extension-0.2.8/popup.css",
+      "bytes": 471,
+      "sha256": "b9556c3bbab37405fcf2225d0cfc2266312f2dc76d4799381f9288103d023076"
+    },
+    {
+      "path": "chrome-extension-0.2.8/popup.html",
+      "bytes": 424,
+      "sha256": "8bfbfab660861a54560af66d9d050630be7ee3ca28274ebb20a637bcf56ba1b6"
+    },
+    {
+      "path": "chrome-extension-0.2.8/popup.js",
+      "bytes": 796,
+      "sha256": "d8253fd7bf179acaa22957b9ef472f0f7e82c113e18200fa68c2d7d8649a96c4"
+    }
+  ]
+}
