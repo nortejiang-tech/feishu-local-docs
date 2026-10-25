@@ -37,3 +37,28 @@ test('native Base fields and records are included in one-click local delivery wi
  chrome.scripting.executeScript=async({func})=>[{frameId:0,result:func.name==='capturePage'?{ok:true,snapshot}:func.name==='captureBaseTables'?{ok:true,tables:[{sourceId:'base',kind:'bitable',status:'VIEW_SNAPSHOT',code:'BASE_EDITOR_AND_COVERAGE_PENDING',payload,counts:{fields:1,records:1,views:0,declaredRecords:null,metaRecords:null},byteLength:new TextEncoder().encode(JSON.stringify(payload)).byteLength,sha256:'a'.repeat(64)}]}:{ok:true,assets:[]}}];
  chrome.runtime.sendNativeMessage=async(_host,message)=>{delivered=await decodeDocument(message.text);return{ok:true,status:'DELIVERED'};};assert.equal((await saveTab(102)).ok,true);assert.equal(delivered.content.content[0].type,'localBase');assert.equal(delivered.provenance.audit.counts.structuredBases,1);
 });
+
+test('page budget timeout retries once and preserves delivery guards',async()=>{
+ const calls=setup();let reads=0;
+ chrome.scripting.executeScript=async()=>[{frameId:0,result:++reads===1?{ok:false,code:'CAPTURE_TIMEOUT'}:{ok:true,snapshot:makeDemo('document')}}];
+ assert.equal((await saveTab(33)).ok,true);assert.equal(reads,2);assert.equal(calls.filter(x=>x==='native').length,1);
+ setup();reads=0;chrome.scripting.executeScript=async()=>[{frameId:0,result:{ok:false,code:(++reads,'CAPTURE_TIMEOUT')}}];
+ assertFailure(await saveTab(34),'CAPTURE','CAPTURE_TIMEOUT');assert.equal(reads,2);
+});
+test('hung injected execution stops task and a late result never reaches native host',async()=>{
+ const calls=setup();let finish,reads=0;chrome.scripting.executeScript=()=>{reads++;return new Promise(resolve=>finish=resolve)};
+ const timer=globalThis.setTimeout;globalThis.setTimeout=(fn,ms,...args)=>timer(fn,ms===30000?10:ms,...args);
+ try{assertFailure(await saveTab(35),'CAPTURE','CAPTURE_EXECUTION_TIMEOUT');finish([{frameId:0,result:{ok:true,snapshot:makeDemo('document')}}]);await new Promise(r=>setImmediate(r));assert.equal(reads,1);assert.ok(!calls.includes('native'));}finally{globalThis.setTimeout=timer;}
+});
+
+test('navigation checkpoint before retry prevents a second read and native save',async()=>{
+ const calls=setup();let checks=0,reads=0;chrome.scripting.executeScript=async()=>{reads++;return [{frameId:0,result:{ok:false,code:'CAPTURE_TIMEOUT'}}]};
+ const result=await saveTab(36,{checkpoint:async()=>{if(++checks===3)throw Object.assign(Error(),{code:'SOURCE_CHANGED'})}});
+ assertFailure(result,'CAPTURE','SOURCE_CHANGED');assert.equal(reads,1);assert.ok(!calls.includes('native'));
+});
+test('hung embed warmup aborts without resource calls or native delivery',async()=>{
+ const calls=setup(),snapshot=makeDemo('document');snapshot.model={rootIds:['root'],blocks:[{id:'root',type:'page',text:'',richText:null,children:['wb'],parentId:null,properties:{}},{id:'wb',type:'whiteboard',text:'',richText:null,children:[],parentId:'root',properties:{},resource:{kind:'whiteboard',resourceId:'board'}}]};
+ let reads=0,finish;chrome.scripting.executeScript=async()=>{if(++reads===1)return [{frameId:0,result:{ok:true,snapshot}}];return new Promise(r=>finish=r)};
+ const timer=globalThis.setTimeout;globalThis.setTimeout=(fn,ms,...args)=>timer(fn,ms===150000?10:ms,...args);
+ try{assertFailure(await saveTab(37),'CAPTURE','CAPTURE_EXECUTION_TIMEOUT');finish([{frameId:0,result:{ok:true,embeds:[]}}]);await new Promise(r=>setImmediate(r));assert.equal(reads,2);assert.ok(!calls.includes('native'));}finally{globalThis.setTimeout=timer;}
+});

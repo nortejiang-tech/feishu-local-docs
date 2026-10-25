@@ -10,7 +10,7 @@ import { withDeadline } from './operation-deadline.mjs';
 import {documentSummary,libraryView} from '../../shared/library-view.mjs';
 import {ConnectionPanel,TaskPanel,HistoryPanel} from './WorkspacePanels.jsx';
 import { createStarterDocuments } from './samples.mjs';
-import { exportLocal, exportHtml, importFeishu, isNative, loadLibraryIndex, loadDocument, moveLocal, revealLocal, readTask, openLocal, openHistory, saveLocal, watchIncoming } from './io.mjs';
+import { exportLocal, exportHtml, revealExports, revealManagedExport, importFeishu, isNative, loadLibraryIndex, loadDocument, moveLocal, revealLocal, readTask, openLocal, openHistory, saveLocal, watchIncoming } from './io.mjs';
 const DocumentEditor=lazy(()=>import('./editors/DocumentEditor.jsx'));
 const SheetEditor=lazy(()=>import('./editors/SheetEditor.jsx'));
 
@@ -401,7 +401,7 @@ export default function App() {
     finally { setBusy(''); }
   };
 
-  const saveCopy = async (format = 'localdoc') => {
+  const saveCopy = async (format = 'localdoc', chooseLocation = false) => {
     if (busyRef.current) return;
     const previousId = activeIdRef.current;
     setBusy(format === 'html' ? 'html' : 'export');
@@ -411,10 +411,10 @@ export default function App() {
       let librarySaved=true;
       try{await queueSave(doc);}catch{librarySaved=false;}
       setNotice(null);
-      const result = await (format === 'html' ? exportHtml(doc) : exportLocal(doc));
+      const result = await (format === 'html' ? exportHtml(doc,{chooseLocation}) : exportLocal(doc,{chooseLocation}));
       if (!result?.cancelled) {
         const message = format === 'html' ? (result?.initiated ? 'HTML 下载已发起，可用浏览器离线打开。' : 'HTML 已保存，可用浏览器离线打开。') : (result?.initiated ? '本地副本下载已发起。' : '本地副本已保存。');
-        setNotice({kind:result?.warnings?.length||!librarySaved ? 'partial' : 'success',message:message+(!librarySaved?' 本机资料库尚未更新，此次副本保留了当前编辑。':'')+(result?.warnings?.length ? ' 未完整转换的内容已在 HTML 中标注。' : '')});
+        setNotice({kind:result?.warnings?.length||!librarySaved ? 'partial' : 'success',exportResult:result?.exportId?result:null,message:message+(result?.exportId?' 已放入本机导出文件夹。':'')+(!librarySaved?' 本机资料库尚未更新，此次副本保留了当前编辑。':'')+(result?.warnings?.length ? ' 未完整转换的内容已在 HTML 中标注。' : '')});
       }
     } catch (error) { showError(error, 'export'); }
     finally { setBusy(''); }
@@ -537,13 +537,13 @@ export default function App() {
           </div>
           <div className="header-actions">
           <button className="secondary-button" onClick={openFile} disabled={!booted || !!busy}><FolderOpen size={17} /><span>打开文件</span></button>
-            <details className="export-menu"><summary aria-disabled={!activeDoc||!!busy||view!=='editor'} onClick={e=>{if(!activeDoc||busy||view!=='editor')e.preventDefault();}}>导出 <ChevronDown size={15}/></summary><div role="menu"><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy();}}><Save size={17}/>保存可编辑副本</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy('html');}}><FileCode2 size={17}/>保存为 HTML</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void changeView('history');}}><Clock3 size={17}/>历史版本</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;if(activeDoc)void revealLocal(activeDoc.id).catch(error=>showError(error,'open'));}}><FolderOpen size={17}/>在 Finder 中显示</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;if(activeDoc)void moveDocument(activeDoc,true);}}><Trash2 size={17}/>移到最近删除</button></div></details>
+            <details className="export-menu"><summary aria-disabled={!activeDoc||!!busy||view!=='editor'} onClick={e=>{if(!activeDoc||busy||view!=='editor')e.preventDefault();}}>导出 <ChevronDown size={15}/></summary><div role="menu"><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy();}}><Save size={17}/>保存可编辑副本</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy('html');}}><FileCode2 size={17}/>保存为 HTML</button>{isNative()&&<><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy('html',true);}}>另存 HTML 到…</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy('localdoc',true);}}>另存可编辑副本到…</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void revealExports().catch(error=>showError(error,'export'));}}>打开本机导出文件夹</button></>}<button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void changeView('history');}}><Clock3 size={17}/>历史版本</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;if(activeDoc)void revealLocal(activeDoc.id).catch(error=>showError(error,'open'));}}><FolderOpen size={17}/>在 Finder 中显示</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;if(activeDoc)void moveDocument(activeDoc,true);}}><Trash2 size={17}/>移到最近删除</button></div></details>
             {experimental&&<button className="primary-button" onClick={restoreToFeishu} disabled={!activeDoc||!!busy||view!=='editor'} title="实验功能：创建新副本后仍需核对保真"><FileText size={17}/><span>实验回导</span></button>}
           </div>
           {busyLabel && <span className="list-hint" role="status" aria-live="polite">{busyLabel}</span>}
         </header>
 
-        {notice && <div className={`notice notice-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}><span>{notice.kind === 'error' ? <AlertCircle size={17} /> : <Check size={17} />}</span><p>{notice.message}{notice.link && <> <a href={notice.link} target="_blank" rel="noreferrer">{notice.linkText}</a></>}</p><button className="icon-button notice-close" onClick={() => setNotice(null)} aria-label="关闭提示"><X size={16} /></button></div>}
+        {notice && <div className={`notice notice-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}><span>{notice.kind === 'error' ? <AlertCircle size={17} /> : <Check size={17} />}</span><p>{notice.message}{notice.exportResult&&<> <button onClick={()=>void revealManagedExport(notice.exportResult).catch(error=>showError(error,'export'))}>在 Finder 中显示导出文件</button></>}{notice.link && <> <a href={notice.link} target="_blank" rel="noreferrer">{notice.linkText}</a></>}</p><button className="icon-button notice-close" onClick={() => setNotice(null)} aria-label="关闭提示"><X size={16} /></button></div>}
 
         {saveState?.state==='error'&&<div className="notice notice-error" role="alert"><AlertCircle size={17}/><p>{saveState.message||'自动保存未完成，当前编辑仍在窗口中。'}</p><button className="secondary-button" disabled={!!busy} onClick={()=>saveCopy()}>保存当前编辑副本</button></div>}
         {view==='editor'&&<>

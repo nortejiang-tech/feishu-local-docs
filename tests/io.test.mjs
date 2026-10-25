@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDocument,encodeDocument,decodeDocument} from '../shared/model.mjs';
-import {loadLibrary,loadLibraryIndex,loadDocument,saveLocal,openLocal,exportHtml,listHistory,openHistory} from '../app/src/io.mjs';
+import {loadLibrary,loadLibraryIndex,loadDocument,saveLocal,openLocal,exportHtml,exportLocal,listHistory,openHistory} from '../app/src/io.mjs';
 
 test('library retains valid files while isolating corrupt or unsupported files',async()=>{
  const doc=createDocument('document','Good');
@@ -28,9 +28,9 @@ test('HTML export uses its dedicated native action, preserves source and propaga
  const doc=createDocument('document','Reading copy');const before=JSON.stringify(doc),calls=[];
  let response={cancelled:false};
  globalThis.window={localDocsNative:{request:async(action,payload)=>{calls.push({action,payload});if(response instanceof Error)throw response;return response;}}};
- const result=await exportHtml(doc);assert.equal(result.cancelled,false);assert.equal(calls[0].action,'saveHtml');assert.equal(calls[0].payload.name,'Reading copy.html');assert.match(calls[0].payload.text,/<!doctype html>/);assert.equal(JSON.stringify(doc),before);
- response={cancelled:true};assert.equal((await exportHtml(doc)).cancelled,true);
- response=Error('FILE_IO_FAILED');await assert.rejects(exportHtml(doc),/保存失败/);
+ const result=await exportHtml(doc,{chooseLocation:true});assert.equal(result.cancelled,false);assert.equal(calls[0].action,'saveHtml');assert.equal(calls[0].payload.name,'Reading copy.html');assert.match(calls[0].payload.text,/<!doctype html>/);assert.equal(JSON.stringify(doc),before);
+ response={cancelled:true};assert.equal((await exportHtml(doc,{chooseLocation:true})).cancelled,true);
+ response=Error('FILE_IO_FAILED');await assert.rejects(exportHtml(doc,{chooseLocation:true}),/保存失败/);
 });
 
 test('native startup reads summaries and hydrates only the requested document',async()=>{
@@ -59,4 +59,12 @@ test('history opens as an independent document and refuses mismatched identity o
  await assert.rejects(openHistory(crypto.randomUUID(),hash),/文件结构/);
  await assert.rejects(openHistory(doc.id,'0'.repeat(64)),/文件结构/);
  await assert.rejects(openHistory(doc.id,'../escape'),/文件结构/);
+});
+
+test('default native exports confirm exact bytes without opening a system panel',async()=>{
+ const doc=createDocument('document','本机副本'.repeat(40)),before=JSON.stringify(doc),calls=[];
+ globalThis.window={localDocsNative:{request:async(action,payload)=>{calls.push(action);assert.equal(action,'exportManaged');assert.ok(new TextEncoder().encode(payload.name).length<=240);const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(payload.text)));return {cancelled:false,exportId:payload.requestId,name:payload.name,kind:payload.kind,sha256:Array.from(bytes,v=>v.toString(16).padStart(2,'0')).join('')};}}};
+ assert.equal((await exportHtml(doc)).kind,'html');assert.equal((await exportLocal(doc)).kind,'localdoc');assert.deepEqual(calls,['exportManaged','exportManaged']);assert.equal(JSON.stringify(doc),before);
+ globalThis.window.localDocsNative.request=async()=>({cancelled:false,sha256:'wrong'});
+ await assert.rejects(exportHtml(doc),/完整性确认/);
 });

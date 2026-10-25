@@ -60,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     let library = appDirectory.appendingPathComponent("Library", isDirectory: true)
     let fileQueue = DispatchQueue(label: "localdocs.files")
     lazy var catalog = NativeLibrary(root:appDirectory) { _ = try safeEnvelope($0) }
+    lazy var exports = NativeExports(root:appDirectory) { _ = try safeEnvelope($0) }
     func applicationDidFinishLaunching(_ notification: Notification) {
         let appMenu = NSMenu(); let root = NSMenuItem(); appMenu.addItem(root)
         let menu = NSMenu(); menu.addItem(withTitle:"关于本地文档", action:#selector(about), keyEquivalent:"")
@@ -259,6 +260,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 guard response == .OK, let url = panel.url else { self.reply(id); return }
                 do { self.reply(id,data:["text":try readBounded(url),"name":url.lastPathComponent]) } catch { self.reply(id,error:LocalError.io.rawValue) }
             }
+        case "exportManaged":
+            guard let requestId=p["requestId"] as? String,let text=p["text"] as? String,let name=p["name"] as? String,let kind=p["kind"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{self.reply(id,data:try self.exports.save(requestId:requestId,text:text,name:name,kind:kind))}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "revealManagedExport":
+            guard let requestId=p["exportId"] as? String,let name=p["name"] as? String,let kind=p["kind"] as? String,let hash=p["sha256"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{let url=try self.exports.verifiedFile(requestId:requestId,name:name,kind:kind,sha256:hash);DispatchQueue.main.async{NSWorkspace.shared.activateFileViewerSelecting([url]);self.reply(id,data:true)}}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "revealExports":
+            fileQueue.async {do{let folder=try self.exports.folder();DispatchQueue.main.async{NSWorkspace.shared.activateFileViewerSelecting([folder]);self.reply(id,data:true)}}catch{self.reply(id,error:LocalError.io.rawValue)}}
         case "saveCopy":
             guard let text = p["text"] as? String, (try? safeEnvelope(text)) != nil else { reply(id,error:LocalError.invalid.rawValue); return }
             let panel = NSSavePanel(); panel.nameFieldStringValue = (p["name"] as? String ?? "文档.localdoc"); panel.allowedContentTypes = [UTType(filenameExtension:"localdoc") ?? .data]

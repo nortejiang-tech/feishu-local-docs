@@ -197,21 +197,33 @@ export async function openLocal() {
     return {...imported,id:crypto.randomUUID()};
   } catch(error) { throw friendly(error); }
 }
-export async function exportLocal(doc) {
+export function revealExports(){return native('revealExports');}
+export function revealManagedExport(result){return native('revealManagedExport',{exportId:result.exportId,name:result.name,kind:result.kind,sha256:result.sha256});}
+async function managedExport(text,name,kind){
+  const extension='.'+kind;let stem=Array.from(name.slice(0,-extension.length));
+  while(new TextEncoder().encode(stem.join('')+extension).length>240)stem.pop();
+  name=(stem.join('')||'文档')+extension;
+  const expected=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),v=>v.toString(16).padStart(2,'0')).join('');
+  const requestId=crypto.randomUUID();
+  const result=await withDeadline(native('exportManaged',{requestId,text,name,kind}),DEFAULT_OPERATION_TIMEOUT_MS).catch(error=>{if(error?.message==='OPERATION_TIMEOUT')throw Error('导出尚未确认完成，请在“打开本机导出文件夹”中检查已有结果。');throw error;});
+  if(result?.sha256!==expected||result?.exportId!==requestId||result?.name!==name||result?.kind!==kind)throw Error('导出未通过完整性确认，请在本机导出文件夹中检查结果。');
+  return result;
+}
+export async function exportLocal(doc,{chooseLocation=false}={}) {
   try {
     const text=await encodeDocument(doc), name=safeFileName(doc.title);
-    if(isNative())return await native('saveCopy',{text,name});
+    if(isNative())return chooseLocation?await native('saveCopy',{text,name}):await managedExport(text,name,'localdoc');
     const url=URL.createObjectURL(new Blob([text],{type:'application/octet-stream'}));
     const a=document.createElement('a'); a.href=url;a.download=name; document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
     return {cancelled:false,initiated:true};
   } catch(error) { throw friendly(error); }
 }
-export async function exportHtml(doc) {
+export async function exportHtml(doc,{chooseLocation=false}={}) {
   try {
     const {buildHtmlFile}=await import('../../shared/html-export.mjs');
     const output=buildHtmlFile(doc);
     let result;
-    if(isNative()) result=await native('saveHtml',{text:output.html,name:output.name});
+    if(isNative()) result=chooseLocation?await native('saveHtml',{text:output.html,name:output.name}):await managedExport(output.html,output.name,'html');
     else {
       const url=URL.createObjectURL(new Blob([output.html],{type:'text/html;charset=utf-8'}));
       const a=document.createElement('a');a.href=url;a.download=output.name;

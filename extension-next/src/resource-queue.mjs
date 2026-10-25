@@ -13,7 +13,7 @@ export async function readResourceQueue(resources,{read,checkpoint=async()=>{},n
       else if(bytes>=byteBudget)asset.code='RESOURCE_BYTE_LIMIT';
       else for(let attempt=0;attempt<2;attempt++){
         let reply;
-        try{reply=await read(entry,byteBudget-bytes);}catch{reply=null;}
+        try{reply=await read(entry,byteBudget-bytes);}catch(error){if(['CAPTURE_EXECUTION_TIMEOUT','SOURCE_CHANGED','TASK_CANCELLED'].includes(error?.code))throw error;reply=null;}
         if(reply?.code==='SOURCE_CHANGED')throw Object.assign(new Error(),{stage:'CAPTURE',code:'SOURCE_CHANGED'});
         const received=reply?.ok&&Array.isArray(reply.assets)?reply.assets.find(a=>a.sourceId===entry.sourceId):null;
         asset=received||{...asset,code:'RESOURCE_READ_FAILED'};

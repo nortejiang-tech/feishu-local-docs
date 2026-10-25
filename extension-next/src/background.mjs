@@ -1,3 +1,4 @@
+import {readWithDeadline,runCaptureRead} from './capture-runner.mjs';
 import { captureResources } from '../../extension/resources.mjs';
 import { capturePage } from '../../extension/capture.mjs';
 import { captureEmbeds } from '../../extension/embedded.mjs';
@@ -14,6 +15,7 @@ const messages = {
   SOURCE_CHANGED:'页面已经切换，请在要保存的文件中重新点击。',
   SLIDES_ADAPTER_PENDING:'本轮先支持文档和电子表格。',
   MODEL_UNAVAILABLE:'当前页面的内容尚未就绪，或这种页面结构还不支持。',
+  CAPTURE_EXECUTION_TIMEOUT:'页面读取没有及时返回，任务已停止。请保持原文件标签页可见后重试。',
   CAPTURE_TIMEOUT:'本次读取未完成，原文件未改动。',
   EMPTY_OR_UNLOADED_SHEET:'仍有工作表未加载完整。',
   MODEL_SHAPE_CHANGED:'飞书页面结构已变化，插件暂时无法识别。请刷新页面后重试。',
@@ -52,7 +54,7 @@ const messages = {
   NATIVE_OUTPUT_PENDING:'可编辑副本已保留，HTML尚未完成。请在应用的保存任务中修复HTML输出。',
   SAVE_FAILED:'这次保存未完成。请保留源文件，稍后重试。'
 };
-const captureCodes=new Set(['UNSUPPORTED_SOURCE','SOURCE_CHANGED','SLIDES_ADAPTER_PENDING','MODEL_UNAVAILABLE','CAPTURE_TIMEOUT','EMPTY_OR_UNLOADED_SHEET','MODEL_SHAPE_CHANGED','BLOCK_LIMIT','BLOCK_ID_INVALID','BLOCK_NOT_READY','CELL_RANGE_LIMIT','SHEET_LIMIT','FIELD_LIMIT','CONTENT_LIMIT','TEXT_SHAPE_CHANGED','ATTRIBUTE_LIMIT','PAYLOAD_LIMIT','PAGE_READ_FAILED','RESOURCE_LIMIT']);
+const captureCodes=new Set(['UNSUPPORTED_SOURCE','SOURCE_CHANGED','SLIDES_ADAPTER_PENDING','MODEL_UNAVAILABLE','CAPTURE_EXECUTION_TIMEOUT','CAPTURE_TIMEOUT','EMPTY_OR_UNLOADED_SHEET','MODEL_SHAPE_CHANGED','BLOCK_LIMIT','BLOCK_ID_INVALID','BLOCK_NOT_READY','CELL_RANGE_LIMIT','SHEET_LIMIT','FIELD_LIMIT','CONTENT_LIMIT','TEXT_SHAPE_CHANGED','ATTRIBUTE_LIMIT','PAYLOAD_LIMIT','PAGE_READ_FAILED','RESOURCE_LIMIT']);
 const conversionCodes=new Set(['IMPORT_INVALID','IMPORT_TOO_LARGE','ARCHIVE_INVALID','DOCUMENT_INVALID','DOCUMENT_TOO_LARGE','CRYPTO_UNAVAILABLE']);
 const diagnosticCodes=new Set([...captureCodes,...conversionCodes,'UNSUPPORTED_SOURCE','SCRIPT_ACCESS_DENIED','EXECUTE_SCRIPT_FAILED','CAPTURE_RESULT_MISSING','CAPTURE_FAILED','CONVERSION_FAILED','NATIVE_HOST_MISSING','NATIVE_HOST_FORBIDDEN','NATIVE_HOST_START_FAILED','NATIVE_CONNECTION_FAILED','NATIVE_REPLY_INVALID','LOCAL_DELIVERY_FAILED','NATIVE_DELIVERY_UNCONFIRMED','NATIVE_OUTPUT_PENDING','SAVE_IN_PROGRESS','SAVE_FAILED']);
 const chromeScriptErrors=new Map([
@@ -81,10 +83,15 @@ export async function saveTab(tabId,options={}) {
     await check('CAPTURE');
     await chrome.action.setBadgeText({tabId,text:'…'});
     stage='CAPTURE';
-    let result;
-    try { result=await chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:capturePage,args:[{expectedSource:source.origin+source.pathname}]}); }
-    catch(error) { code=chromeScriptErrors.get(error?.message)||'EXECUTE_SCRIPT_FAILED';throw Object.assign(new Error(),{stage,code}); }
-    const capture=result?.find?.(x=>x.frameId===0)?.result;
+    const capture=await runCaptureRead({
+      checkpoint:()=>check('CAPTURE'),
+      read:async()=>{
+        let result;
+        try {result=await chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:capturePage,args:[{expectedSource:source.origin+source.pathname}]});}
+        catch(error){throw Object.assign(new Error(),{stage:'CAPTURE',code:chromeScriptErrors.get(error?.message)||'EXECUTE_SCRIPT_FAILED'});}
+        return result?.find?.(x=>x.frameId===0)?.result;
+      }
+    });
     if(!capture||typeof capture!=='object') { code='CAPTURE_RESULT_MISSING';throw Object.assign(new Error(),{stage,code}); }
     if(!capture.ok) { code=captureCodes.has(capture.code)?capture.code:'CAPTURE_FAILED';throw Object.assign(new Error(),{stage,code}); }
     await check('CAPTURE');
@@ -94,21 +101,21 @@ export async function saveTab(tabId,options={}) {
       const embeddedResources=resources.filter(entry=>entry.kind==='whiteboard');
       if(embeddedResources.length) {
         try {
-          const read=await chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:captureEmbeds,args:[{expectedSource:source.origin+source.pathname,resources:embeddedResources,warm:true}]});
+          const read=await readWithDeadline(()=>chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:captureEmbeds,args:[{expectedSource:source.origin+source.pathname,resources:embeddedResources,warm:true}]}),{timeoutMs:150000});
           const result=read?.find(x=>x.frameId===0)?.result;
           if(result?.code==='SOURCE_CHANGED')throw Object.assign(new Error(),{stage:'CAPTURE',code:'SOURCE_CHANGED'});
           if(result?.ok&&Array.isArray(result.embeds))embeds=result.embeds;
-        } catch(error){if(error?.code==='SOURCE_CHANGED')throw error;}
+        } catch(error){if(['SOURCE_CHANGED','CAPTURE_EXECUTION_TIMEOUT','TASK_CANCELLED'].includes(error?.code))throw error;}
         await check('CAPTURE');
       }
       const baseResources=resources.filter(entry=>entry.kind==='bitable');
       if(baseResources.length){
         try{
-          const read=await chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:captureBaseTables,args:[{expectedSource:source.origin+source.pathname,resources:baseResources}]});
+          const read=await readWithDeadline(()=>chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:captureBaseTables,args:[{expectedSource:source.origin+source.pathname,resources:baseResources}]}));
           const result=read?.find(x=>x.frameId===0)?.result;
           if(result?.code==='SOURCE_CHANGED')throw Object.assign(new Error(),{stage:'CAPTURE',code:'SOURCE_CHANGED'});
           if(result?.ok&&Array.isArray(result.tables))embeds.push(...result.tables);
-        }catch(error){if(error?.code==='SOURCE_CHANGED')throw error;}
+        }catch(error){if(['SOURCE_CHANGED','CAPTURE_EXECUTION_TIMEOUT','TASK_CANCELLED'].includes(error?.code))throw error;}
         await check('CAPTURE');
       }
       if(resources.length) {
@@ -117,11 +124,11 @@ export async function saveTab(tabId,options={}) {
           assets=await readResourceQueue([...resources,...boardImages],{
             checkpoint:progress=>check('CAPTURE',{progress}),
             async read(entry,byteBudget){
-              const read=await chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:captureResources,args:[{expectedSource:source.origin+source.pathname,resources:[entry],byteBudget}]});
+              const read=await readWithDeadline(()=>chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:captureResources,args:[{expectedSource:source.origin+source.pathname,resources:[entry],byteBudget}]}));
               return read?.find(x=>x.frameId===0)?.result;
             }
           });
-        } catch(error) {if(['SOURCE_CHANGED','TASK_CANCELLED','RESOURCE_LIMIT'].includes(error?.code))throw error;}
+        } catch(error) {if(['SOURCE_CHANGED','TASK_CANCELLED','RESOURCE_LIMIT','CAPTURE_EXECUTION_TIMEOUT'].includes(error?.code))throw error;}
         await check('CAPTURE');
       }
       // Images inside native drawings are separate from document image blocks.

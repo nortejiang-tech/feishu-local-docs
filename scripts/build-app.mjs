@@ -45,7 +45,7 @@ for(const entry of Object.keys(lock.packages).filter(p=>p.startsWith('node_modul
 await writeFile(path.join(contents,'Resources/THIRD-PARTY-NOTICES.txt'),notices);
 await writeFile(path.join(contents,'Resources/native-host'),'#!/bin/sh\nexec "$(dirname "$0")/../MacOS/LocalDocs" --native-host "$@"\n');await chmod(path.join(contents,'Resources/native-host'),0o755);
 const nativeSource=path.join(staging,'LocalDocs.swift');
-await writeFile(nativeSource,(await readFile(path.join(root,'desktop/NativeDelivery.swift'),'utf8'))+'\n'+(await readFile(path.join(root,'desktop/NativeLibrary.swift'),'utf8'))+'\n'+await readFile(path.join(root,'desktop/LocalDocs.swift'),'utf8'));
+await writeFile(nativeSource,(await readFile(path.join(root,'desktop/NativeDelivery.swift'),'utf8'))+'\n'+(await readFile(path.join(root,'desktop/NativeLibrary.swift'),'utf8'))+'\n'+(await readFile(path.join(root,'desktop/NativeExports.swift'),'utf8'))+'\n'+await readFile(path.join(root,'desktop/LocalDocs.swift'),'utf8'));
 run('swiftc',['-swift-version','5','-O','-target','arm64-apple-macosx13.0',nativeSource,'-o',path.join(contents,'MacOS/LocalDocs')]);
 // Sign outside File Provider locations, which can reattach Finder metadata while signing.
 run('/usr/bin/codesign',['--force','--sign','-',stagedBundle]);
