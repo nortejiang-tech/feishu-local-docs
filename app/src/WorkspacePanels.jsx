@@ -1,5 +1,16 @@
 import React,{useEffect,useState} from 'react';
-import {systemStatus,repairConnection,showExtension,listTasks,repairTaskHtml,revealTaskHtml} from './io.mjs';
+import {systemStatus,repairConnection,showExtension,listTasks,repairTaskHtml,revealTaskHtml,listHistory} from './io.mjs';
+
+export function HistoryPanel({documentId,onOpen}){
+  const [entries,setEntries]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const refresh=async()=>{setBusy(true);try{setEntries(await listHistory(documentId));setError('');}catch(error){setError(error.message||'历史版本无法读取，当前文件仍保留。');}finally{setBusy(false);}};
+  useEffect(()=>{void refresh();},[documentId]);
+  return <section className="utility-panel" aria-label="历史版本"><div className="panel-heading"><h1>历史版本</h1><button className="secondary-button" disabled={busy} onClick={refresh}>刷新历史版本</button></div>
+    <p>自动保存前保留上一版本，每份文件最多保留 10 个版本、合计约 64 MB。打开历史版本会创建独立副本，可以继续编辑。</p>
+    {error&&<p role="alert">{error}</p>}{!busy&&!entries.length&&<p>还没有历史版本。修改并保存文件后，上一版本会出现在这里。</p>}
+    <ul className="task-list">{entries.map(entry=><li key={entry.hash}><div><strong>{entry.title}</strong><small>修订 {entry.revision} · {new Date(entry.savedAt).toLocaleString()} · {(entry.bytes/1024).toFixed(1)} KB</small></div><button className="secondary-button" disabled={busy} onClick={()=>onOpen(documentId,entry.hash)}>打开为独立副本</button></li>)}</ul>
+  </section>;
+}
 
 export function ConnectionPanel({experimental,onExperimental}){
   const [info,setInfo]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);

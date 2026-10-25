@@ -182,6 +182,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         case "readDocument":
             guard let docId=p["documentId"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
             fileQueue.async {do{self.reply(id,data:["text":try self.catalog.load(docId)])}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "listHistory":
+            guard let docId=p["documentId"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{self.reply(id,data:try self.catalog.listHistory(docId))}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "readHistory":
+            guard let docId=p["documentId"] as? String,let hash=p["hash"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{self.reply(id,data:["text":try self.catalog.loadHistory(docId,hash:hash)])}catch{self.reply(id,error:LocalError.io.rawValue)}}
         case "trashDocument", "restoreDocument":
             guard let docId=p["documentId"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
             fileQueue.async {do{try self.catalog.move(docId,toTrash:action=="trashDocument");self.reply(id,data:true)}catch{self.reply(id,error:LocalError.io.rawValue)}}
@@ -244,7 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         case "save":
             guard let text = p["text"] as? String else { reply(id,error:LocalError.invalid.rawValue); return }
             fileQueue.async { do {
-                try self.catalog.save(text)
+                try self.catalog.save(text,expectedHash:p["expectedHash"] as? String)
                 self.reply(id,data:["savedAt":ISO8601DateFormatter().string(from:Date()),"location":"本机资料库"])
             } catch let error as LibraryFailure { self.reply(id,error:error.rawValue) } catch { self.reply(id,error:LocalError.io.rawValue) } }
         case "open":

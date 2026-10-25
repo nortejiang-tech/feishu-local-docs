@@ -4,6 +4,7 @@ import {buildWhiteboardScene} from './whiteboard-scene.mjs';
 import {buildBaseGrid} from './base-grid.mjs';
 import {baseDateInput} from './base-date.mjs';
 import {buildSheetAudit} from './sheet-audit.mjs';
+import {composeStyleLayers} from './style-layers.mjs';
 
 // No captured markup, URLs, CSS declarations or scripts are passed through.
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -145,22 +146,32 @@ function workbookHtml(doc,ctx) {
   if(book.defaultStyle)warn(ctx,'工作簿默认样式未完整转换，当前使用单元格样式。');
   return book.sheetOrder.map((id,index)=>{
     const sheet=book.sheets[id],layout=buildSheetLayout(sheet,150000-ctx.positions);ctx.positions+=layout.positions;
-    if(sheet.defaultStyle || Object.values(sheet.rowData||{}).some(v=>v?.s) || Object.values(sheet.columnData||{}).some(v=>v?.s))warn(ctx,'工作表默认样式或整行整列样式未完整转换，当前使用单元格样式。');
     if(sheet.backgroundImage || sheet.resources?.length || sheet.custom)warn(ctx,'工作表的背景或高级对象未加入 HTML。');
     if(sheet.freeze?.xSplit || sheet.freeze?.ySplit)warn(ctx,'HTML 使用连续表格布局，不保留冻结行列交互。');
     const captureIndex=/^sheet-([1-9]\d*)$/.exec(id);
     const original=captureIndex?doc.provenance.capture?.model?.sheets?.[Number(captureIndex[1])-1]:null;
     const raw=new Map((original?.cells||[]).map(c=>[`${c.row}:${c.column}`,c]));
-    const cellStyle=cell=>typeof cell?.s==='string'?book.styles[cell.s]:cell?.s;
-    const display=(cell,r,c)=>cellText(cell,raw.get(`${r}:${c}`),cellStyle(cell),ctx);
-    const className=cell=>{
-      const css=sheetCss(cellStyle(cell),ctx);if(!css)return '';
+    const styleIds=new WeakMap(),styleCache=new Map();let styleSequence=0;
+    const styleId=value=>value&&typeof value==='object'?(styleIds.has(value)?styleIds.get(value):(styleIds.set(value,++styleSequence),styleSequence)):JSON.stringify(value);
+    const cellStyle=(cell,r,c)=>{
+      // Same default priority as the installed Univer editor: column, row,
+      // computed theme, then explicit cell style. Nested style values replace.
+      const layers=[sheet.defaultStyle,sheet.columnData?.[c]?.s,sheet.rowData?.[r]?.s,cell?.themeStyle,cell?.s];
+      const key=JSON.stringify(layers.map(styleId));if(styleCache.has(key))return styleCache.get(key);
+      const resolved=composeStyleLayers(book.styles||{},layers);
+      if(resolved.missing.length)warn(ctx,'部分样式引用不存在，已保留其他可解析样式。');
+      if(styleCache.size>=512)styleCache.delete(styleCache.keys().next().value);
+      styleCache.set(key,resolved.style);return resolved.style;
+    };
+    const display=(cell,r,c)=>cellText(cell,raw.get(`${r}:${c}`),cellStyle(cell,r,c),ctx);
+    const className=(cell,r,c)=>{
+      const css=sheetCss(cellStyle(cell,r,c),ctx);if(!css)return '';
       if(!ctx.styles.has(css))ctx.styles.set(css,`s${ctx.styles.size}`);
       return ` class="${ctx.styles.get(css)}"`;
     };
     const widths=Array.from({length:sheet.columnCount},(_,c)=>numeric(sheet.columnData?.[c]?.w,numeric(sheet.defaultColumnWidth,100)));
     if(sheet.hidden || Object.values(sheet.rowData||{}).some(v=>v?.hd||v?.h===0) || Object.values(sheet.columnData||{}).some(v=>v?.hd||v?.w===0))warn(ctx,'隐藏工作表或行列已展开，便于离线查看全部内容。');
-    const rows=layout.rows.map((cells,r)=>`<tr style="height:${numeric(sheet.rowData?.[r]?.h,numeric(sheet.defaultRowHeight,24))}px">${cells.map(({column:c,rowspan,colspan,cell})=>`<td data-cell="${address(r,c)}" rowspan="${rowspan}" colspan="${colspan}"${className(cell)}${cell?.f?` title="公式：${esc(cell.f)}"`:''}>${esc(display(cell,r,c))}</td>`).join('')}</tr>`).join('');
+    const rows=layout.rows.map((cells,r)=>`<tr style="height:${numeric(sheet.rowData?.[r]?.h,numeric(sheet.defaultRowHeight,24))}px">${cells.map(({column:c,rowspan,colspan,cell})=>`<td data-cell="${address(r,c)}" rowspan="${rowspan}" colspan="${colspan}"${className(cell,r,c)}${cell?.f?` title="公式：${esc(cell.f)}"`:''}>${esc(display(cell,r,c))}</td>`).join('')}</tr>`).join('');
     let hidden='';
     if(layout.coveredCells.length) {
       warn(ctx,'合并区域内的隐藏值已另列，未丢弃。');

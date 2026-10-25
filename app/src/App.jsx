@@ -8,9 +8,9 @@ import { buildCaptureAudit } from '../../shared/capture-audit.mjs';
 import { buildSheetAudit } from '../../shared/sheet-audit.mjs';
 import { withDeadline } from './operation-deadline.mjs';
 import {documentSummary,libraryView} from '../../shared/library-view.mjs';
-import {ConnectionPanel,TaskPanel} from './WorkspacePanels.jsx';
+import {ConnectionPanel,TaskPanel,HistoryPanel} from './WorkspacePanels.jsx';
 import { createStarterDocuments } from './samples.mjs';
-import { exportLocal, exportHtml, importFeishu, isNative, loadLibraryIndex, loadDocument, moveLocal, revealLocal, readTask, openLocal, saveLocal, watchIncoming } from './io.mjs';
+import { exportLocal, exportHtml, importFeishu, isNative, loadLibraryIndex, loadDocument, moveLocal, revealLocal, readTask, openLocal, openHistory, saveLocal, watchIncoming } from './io.mjs';
 const DocumentEditor=lazy(()=>import('./editors/DocumentEditor.jsx'));
 const SheetEditor=lazy(()=>import('./editors/SheetEditor.jsx'));
 
@@ -148,7 +148,7 @@ export default function App() {
       return result;
     }).catch(error => {
       const current = libraryRef.current.find(doc => doc.id === snapshot.id);
-      if (current?.revision === snapshot.revision) setSaveState(snapshot.id, { state: 'error' });
+      if (current?.revision === snapshot.revision) setSaveState(snapshot.id, { state: 'error',message:errorCopy(error,'save') });
       throw error;
     });
     saveChains.current.set(snapshot.id, task);
@@ -482,6 +482,13 @@ export default function App() {
       setLibraryAndRef(list=>list.some(doc=>doc.id===opened.id)?list.map(doc=>doc.id===opened.id?opened:doc):[...list,opened]);setActiveId(opened.id);setView('editor');if(!previous)await queueSave(opened);
     }catch(error){showError(error,'open');}finally{setBusy('');}
   };
+  const openPastVersion=async(id,hash)=>{
+    if(busyRef.current)return;setBusy('open');
+    try{
+      await flushAndSave();const copy=await openHistory(id,hash);await queueSave(copy);
+      setLibraryAndRef(list=>[...list,copy]);setActiveId(copy.id);setSaveState(copy.id,{state:'saved'});setView('editor');setNotice({kind:'success',message:'历史版本已打开为独立副本。'});
+    }catch(error){showError(error,'open');}finally{setBusy('');}
+  };
   const saveState = activeDoc ? savingById[activeDoc.id] : null;
   const count = activeDoc?.kind === 'document' ? countDocumentText(activeDoc.content) : activeDoc?.kind === 'sheet' ? countSheetText(activeDoc.content) : null;
 
@@ -525,12 +532,12 @@ export default function App() {
         <header className="topbar">
           <button className="icon-button mobile-menu" aria-label="打开导航" onClick={() => setSidebarOpen(true)}><Menu size={19} /></button>
           <div className="file-heading">
-            {titleEditing ? <input ref={titleRef} disabled={!!busy} className="title-input" value={titleDraft} onChange={event => setTitleDraft(event.target.value)} onBlur={commitTitle} onKeyDown={event => { if (event.key === 'Enter') commitTitle(); if (event.key === 'Escape') setTitleEditing(false); }} aria-label="文件名" /> : <button className="title-button" disabled={!!busy||view!=='editor'} onClick={() => { if (activeDoc) { setTitleDraft(activeDoc.title); setTitleEditing(true); } }} title="重命名文件">{view==='editor'?(activeDoc?.title||'本地文档'):({settings:'设置与连接',tasks:'保存任务',trash:'最近删除'})[view]}</button>}
+            {titleEditing ? <input ref={titleRef} disabled={!!busy} className="title-input" value={titleDraft} onChange={event => setTitleDraft(event.target.value)} onBlur={commitTitle} onKeyDown={event => { if (event.key === 'Enter') commitTitle(); if (event.key === 'Escape') setTitleEditing(false); }} aria-label="文件名" /> : <button className="title-button" disabled={!!busy||view!=='editor'} onClick={() => { if (activeDoc) { setTitleDraft(activeDoc.title); setTitleEditing(true); } }} title="重命名文件">{view==='editor'?(activeDoc?.title||'本地文档'):({settings:'设置与连接',tasks:'保存任务',trash:'最近删除',history:'历史版本'})[view]}</button>}
             <span className={`save-indicator ${saveState?.state === 'error' ? 'save-error' : ''}`} aria-live="polite">{saveState?.state === 'saving' && <LoaderCircle className="spin" size={16} />}{saveState?.state === 'saved' && <Check size={16} />}{saveState?.state === 'error' && <AlertCircle size={16} />}{saveLabel}</span>
           </div>
           <div className="header-actions">
           <button className="secondary-button" onClick={openFile} disabled={!booted || !!busy}><FolderOpen size={17} /><span>打开文件</span></button>
-            <details className="export-menu"><summary aria-disabled={!activeDoc||!!busy||view!=='editor'} onClick={e=>{if(!activeDoc||busy||view!=='editor')e.preventDefault();}}>导出 <ChevronDown size={15}/></summary><div role="menu"><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy();}}><Save size={17}/>保存可编辑副本</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy('html');}}><FileCode2 size={17}/>保存为 HTML</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;if(activeDoc)void revealLocal(activeDoc.id).catch(error=>showError(error,'open'));}}><FolderOpen size={17}/>在 Finder 中显示</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;if(activeDoc)void moveDocument(activeDoc,true);}}><Trash2 size={17}/>移到最近删除</button></div></details>
+            <details className="export-menu"><summary aria-disabled={!activeDoc||!!busy||view!=='editor'} onClick={e=>{if(!activeDoc||busy||view!=='editor')e.preventDefault();}}>导出 <ChevronDown size={15}/></summary><div role="menu"><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy();}}><Save size={17}/>保存可编辑副本</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void saveCopy('html');}}><FileCode2 size={17}/>保存为 HTML</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;void changeView('history');}}><Clock3 size={17}/>历史版本</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;if(activeDoc)void revealLocal(activeDoc.id).catch(error=>showError(error,'open'));}}><FolderOpen size={17}/>在 Finder 中显示</button><button role="menuitem" onClick={e=>{e.currentTarget.closest('details').open=false;if(activeDoc)void moveDocument(activeDoc,true);}}><Trash2 size={17}/>移到最近删除</button></div></details>
             {experimental&&<button className="primary-button" onClick={restoreToFeishu} disabled={!activeDoc||!!busy||view!=='editor'} title="实验功能：创建新副本后仍需核对保真"><FileText size={17}/><span>实验回导</span></button>}
           </div>
           {busyLabel && <span className="list-hint" role="status" aria-live="polite">{busyLabel}</span>}
@@ -538,6 +545,7 @@ export default function App() {
 
         {notice && <div className={`notice notice-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}><span>{notice.kind === 'error' ? <AlertCircle size={17} /> : <Check size={17} />}</span><p>{notice.message}{notice.link && <> <a href={notice.link} target="_blank" rel="noreferrer">{notice.linkText}</a></>}</p><button className="icon-button notice-close" onClick={() => setNotice(null)} aria-label="关闭提示"><X size={16} /></button></div>}
 
+        {saveState?.state==='error'&&<div className="notice notice-error" role="alert"><AlertCircle size={17}/><p>{saveState.message||'自动保存未完成，当前编辑仍在窗口中。'}</p><button className="secondary-button" disabled={!!busy} onClick={()=>saveCopy()}>保存当前编辑副本</button></div>}
         {view==='editor'&&<>
         {activeAudit ? <CaptureDetails report={activeAudit} /> : activeSheetAudit ? <SheetCaptureDetails report={activeSheetAudit} /> : activeDoc && issueCount(activeDoc) > 0 && <div className="partial-banner"><AlertCircle size={17} /><span>此文件包含尚未完整转换的内容。请核对原始文件，再决定如何继续编辑。</span></div>}
 
@@ -555,6 +563,7 @@ export default function App() {
         </section>
         {activeDoc&&<div className="file-organization"><label>文件夹 <input aria-label="当前文件的文件夹" list="local-folders" placeholder={activeDoc.localMeta?.folder||'未分类'} value={folderDraft} maxLength={64} onChange={e=>setFolderDraft(e.target.value)}/></label><datalist id="local-folders">{projected.folders.map(name=><option key={name} value={name}/>)}</datalist><button className="secondary-button" disabled={!!busy} onClick={assignFolder}>保存文件夹</button></div>}
         </>}
+        {view==='history'&&activeDoc&&<div className="utility-scroll"><HistoryPanel documentId={activeDoc.id} onOpen={openPastVersion}/></div>}
         {view==='settings'&&<div className="utility-scroll"><ConnectionPanel experimental={experimental} onExperimental={changeExperimental}/></div>}
         {view==='tasks'&&<div className="utility-scroll"><TaskPanel onOpen={openSavedTask}/></div>}
         {view==='trash'&&<section className="utility-scroll utility-panel" aria-label="最近删除"><h1>最近删除</h1><p>文件仍保存在本机，可以恢复。本应用不提供自动清空或永久删除。</p>{!trashDocs.length&&<p>没有最近删除的文件。</p>}<ul className="task-list">{trashDocs.map(doc=><li key={doc.id}><strong>{doc.title}</strong><button className="secondary-button" disabled={!!busy} onClick={()=>moveDocument(doc,false)}>恢复文件</button></li>)}</ul></section>}

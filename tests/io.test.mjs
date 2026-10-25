@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDocument,encodeDocument,decodeDocument} from '../shared/model.mjs';
-import {loadLibrary,loadLibraryIndex,loadDocument,saveLocal,openLocal,exportHtml} from '../app/src/io.mjs';
+import {loadLibrary,loadLibraryIndex,loadDocument,saveLocal,openLocal,exportHtml,listHistory,openHistory} from '../app/src/io.mjs';
 
 test('library retains valid files while isolating corrupt or unsupported files',async()=>{
  const doc=createDocument('document','Good');
@@ -43,4 +43,20 @@ test('native startup reads summaries and hydrates only the requested document',a
 test('native conflicting save keeps the recovery message actionable',async()=>{
  globalThis.window={localDocsNative:{request:async()=>{throw Error('FILE_CONFLICT');}}};
  await assert.rejects(saveLocal(createDocument()),/保存独立副本/);
+});
+
+test('native writes carry the last verified file hash and advance only after confirmation',async()=>{
+ const doc=createDocument('document','Base'),text=await encodeDocument(doc),calls=[];
+ globalThis.window={localDocsNative:{request:async(action,payload)=>{if(action==='readDocument')return {text};calls.push(payload);return {savedAt:'confirmed'};}}};
+ await loadDocument(doc.id);const edited={...doc,revision:1,title:'Edited'};await saveLocal(edited);await saveLocal({...edited,revision:2,title:'Again'});
+ assert.equal(calls[0].expectedHash,JSON.parse(text).sha256);assert.equal(calls[1].expectedHash,JSON.parse(calls[0].text).sha256);
+});
+test('history opens as an independent document and refuses mismatched identity or bytes',async()=>{
+ const doc=createDocument('document','Past'),text=await encodeDocument(doc),hash=JSON.parse(text).sha256;
+ globalThis.window={localDocsNative:{request:async(action,payload)=>action==='listHistory'?[{hash,revision:0}]:{text}}};
+ assert.equal((await listHistory(doc.id))[0].hash,hash);
+ const copy=await openHistory(doc.id,hash);assert.notEqual(copy.id,doc.id);assert.match(copy.title,/历史副本/);assert.deepEqual(copy.content,doc.content);
+ await assert.rejects(openHistory(crypto.randomUUID(),hash),/文件结构/);
+ await assert.rejects(openHistory(doc.id,'0'.repeat(64)),/文件结构/);
+ await assert.rejects(openHistory(doc.id,'../escape'),/文件结构/);
 });

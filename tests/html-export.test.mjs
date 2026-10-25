@@ -89,3 +89,10 @@ test('HTML carries per-source-sheet diagnostics, escapes names and never upgrade
   assert.doesNotMatch(out.html,/<img src=x/);assert.match(out.html,/>LOCAL_EDIT<\/td>/);
   assert.equal(doc.provenance.capture.model.sheets[0].cells[0].value,0);
 });
+test('sheet default column and row styles apply to empty and populated cells with editor precedence',()=>{
+ const doc=book(),sheet=doc.content.sheets['sheet-1'];sheet.defaultStyle={ff:'Arial',fs:15,cl:{rgb:'#123456'}};
+ sheet.columnData={0:{w:140,s:{bg:{rgb:'#ffff00'},bl:1}}};sheet.rowData={0:{h:35,s:{bg:{rgb:'#aabbcc'},bl:0}}};sheet.cellData={0:{0:{v:'Styled'}},1:{0:{v:'Column'}}};
+ const before=JSON.stringify(doc),out=buildHtmlFile(doc);assert.equal(JSON.stringify(doc),before);
+ assert.match(out.html,/background-color:#aabbcc/);assert.match(out.html,/background-color:#ffff00/);assert.match(out.html,/font-family:Arial/);assert.match(out.html,/font-size:15px/);assert.match(out.html,/data-cell="C3"[^>]*class="s\d+"/);
+ assert.ok(!out.warnings.some(x=>x.includes('整行整列')));
+});
