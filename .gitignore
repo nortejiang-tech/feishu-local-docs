@@ -11,6 +11,7 @@
 !/scripts/
 !/tests/
 !/docs/
+!/.github/
 !/releases/
 /app/*
 !/app/src/
@@ -20,6 +21,10 @@
 !/app/vite.config.mjs
 /docs/*
 !/docs/RELEASE-v0.2.8.md
+!/docs/RELEASE-v0.4.0.md
+!/docs/RELEASE-v0.4.1.md
+!/docs/RELEASE-v0.4.2.md
+!/docs/PRIVACY.md
 /releases/*
 !/releases/v0.2.8/
 **/.DS_Store

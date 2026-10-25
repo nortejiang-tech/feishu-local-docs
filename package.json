@@ -1,12 +1,15 @@
 {
   "name": "feishu-local-archive",
-  "version": "0.1.0",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "check": "node scripts/verify.mjs",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "check:product": "node scripts/verify-product.mjs"
   },
-  "engines": {"node": ">=22"}
+  "engines": {
+    "node": ">=22"
+  }
 }

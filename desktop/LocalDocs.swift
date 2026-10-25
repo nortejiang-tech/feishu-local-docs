@@ -59,6 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     var quitRequested = false
     let library = appDirectory.appendingPathComponent("Library", isDirectory: true)
     let fileQueue = DispatchQueue(label: "localdocs.files")
+    lazy var catalog = NativeLibrary(root:appDirectory) { _ = try safeEnvelope($0) }
+    lazy var exports = NativeExports(root:appDirectory) { _ = try safeEnvelope($0) }
     func applicationDidFinishLaunching(_ notification: Notification) {
         let appMenu = NSMenu(); let root = NSMenuItem(); appMenu.addItem(root)
         let menu = NSMenu(); menu.addItem(withTitle:"关于本地文档", action:#selector(about), keyEquivalent:"")
@@ -100,15 +102,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     @objc func about() { let a = NSAlert(); a.messageText = "本地文档 " + (Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "开发版"); a.informativeText = "文档与电子表格的本地编辑开发版。飞书完整保真往返仍在验证中。"; a.runModal() }
     @objc func connectChrome() {
         do {
-            guard let host = Bundle.main.executableURL, let id = Bundle.main.object(forInfoDictionaryKey:"ChromeExtensionID") as? String,
-                  id.range(of:"^[a-p]{32}$",options:.regularExpression) != nil else { throw LocalError.invalid }
-            let configDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Google/Chrome/NativeMessagingHosts",isDirectory:true)
-            let launcher = Bundle.main.resourceURL!.appendingPathComponent("native-host")
-            let manifest: [String:Any] = ["name":"cn.localdocs.bridge","description":"本地文档","path":launcher.path,"type":"stdio","allowed_origins":["chrome-extension://\(id)/"]]
-            _ = host
-            try writePrivate(jsonLiteral(manifest), to:configDir.appendingPathComponent("cn.localdocs.bridge.json"))
+            try registerChrome()
             let a = NSAlert(); a.messageText = "本地应用已连接"; a.informativeText = "Chrome 中加载配套插件后，点击插件即可保存到本地。移动本应用后请重新连接。"; a.runModal()
         } catch { let a = NSAlert(); a.messageText = "连接未完成"; a.informativeText = "无法写入当前用户的插件连接配置。"; a.runModal() }
+    }
+    func connectionManifest() throws -> (URL,[String:Any]) {
+        guard let id=Bundle.main.object(forInfoDictionaryKey:"ChromeExtensionID") as? String,id.range(of:"^[a-p]{32}$",options:.regularExpression) != nil,
+              let resources=Bundle.main.resourceURL else{throw LocalError.invalid}
+        let file=FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Google/Chrome/NativeMessagingHosts/cn.localdocs.bridge.json")
+        return (file,["name":"cn.localdocs.bridge","description":"本地文档","path":resources.appendingPathComponent("native-host").path,"type":"stdio","allowed_origins":["chrome-extension://\(id)/"]])
+    }
+    func registerChrome() throws {
+        let (file,manifest)=try connectionManifest()
+        if FileManager.default.fileExists(atPath:file.path){
+            let old=try readBounded(file)
+            guard let bytes=old.data(using:.utf8),let previous=try JSONSerialization.jsonObject(with:bytes) as? [String:Any],previous["name"] as? String=="cn.localdocs.bridge",previous["allowed_origins"] as? [String]==manifest["allowed_origins"] as? [String] else{throw LocalError.invalid}
+            if previous["path"] as? String != manifest["path"] as? String {
+                try writePrivate(old,to:appDirectory.appendingPathComponent("ConnectionBackups/"+UUID().uuidString+".json"))
+            }
+        }
+        try writePrivate(jsonLiteral(manifest),to:file)
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         pendingFiles += filenames.map { URL(fileURLWithPath:$0) }; deliverFiles(); sender.reply(toOpenOrPrint:.success)
@@ -164,21 +177,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                 var files: [String] = []; var skipped = 0
                 for url in urls { if let text = try? readBounded(url) { files.append(text) } else { skipped += 1 } }
                 self.reply(id,data:["files":files,"skipped":skipped])
-            } catch { self.reply(id,error:LocalError.io.rawValue) } }
+            } catch let error as LibraryFailure { self.reply(id,error:error.rawValue) } catch { self.reply(id,error:LocalError.io.rawValue) } }
+        case "listMetadata":
+            fileQueue.async {do{self.reply(id,data:try self.catalog.list())}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "readDocument":
+            guard let docId=p["documentId"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{self.reply(id,data:["text":try self.catalog.load(docId)])}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "listHistory":
+            guard let docId=p["documentId"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{self.reply(id,data:try self.catalog.listHistory(docId))}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "readHistory":
+            guard let docId=p["documentId"] as? String,let hash=p["hash"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{self.reply(id,data:["text":try self.catalog.loadHistory(docId,hash:hash)])}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "trashDocument", "restoreDocument":
+            guard let docId=p["documentId"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{try self.catalog.move(docId,toTrash:action=="trashDocument");self.reply(id,data:true)}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "revealDocument":
+            guard let docId=p["documentId"] as? String,let file=try? catalog.url(docId),FileManager.default.fileExists(atPath:file.path) else{reply(id,error:LocalError.invalid.rawValue);return}
+            NSWorkspace.shared.activateFileViewerSelecting([file]);reply(id,data:true)
+        case "systemStatus":
+            fileQueue.async { do {
+                let (file,expected)=try self.connectionManifest()
+                let current=(try? readBounded(file)).flatMap{$0.data(using:.utf8)}.flatMap{try? JSONSerialization.jsonObject(with:$0) as? [String:Any]}
+                let matches=current?["path"] as? String==expected["path"] as? String && current?["allowed_origins"] as? [String]==expected["allowed_origins"] as? [String]
+                self.reply(id,data:["native":true,"registrationMatches":matches,"version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "开发版","protocolVersion":1,"extensionId":Bundle.main.object(forInfoDictionaryKey:"ChromeExtensionID") as? String ?? "","location":"本机应用支持目录；文档可通过保存副本搬运","extensionFolderAvailable":FileManager.default.fileExists(atPath:Bundle.main.resourceURL!.appendingPathComponent("ChromeExtension/manifest.json").path)])
+            }catch{self.reply(id,error:LocalError.io.rawValue)} }
+        case "connectChrome":
+            do{try registerChrome();reply(id,data:true)}catch{reply(id,error:"CONNECTION_REPAIR_FAILED")}
+        case "showExtension":
+            let folder=Bundle.main.resourceURL!.appendingPathComponent("ChromeExtension",isDirectory:true)
+            guard FileManager.default.fileExists(atPath:folder.appendingPathComponent("manifest.json").path) else{reply(id,error:LocalError.io.rawValue);return}
+            NSWorkspace.shared.activateFileViewerSelecting([folder]);reply(id,data:true)
+        case "listTasks":
+            fileQueue.async {do{
+                let folder=appDirectory.appendingPathComponent("Inbox",isDirectory:true)
+                guard FileManager.default.fileExists(atPath:folder.path) else{self.reply(id,data:[]);return}
+                let urls=try FileManager.default.contentsOfDirectory(at:folder,includingPropertiesForKeys:[.contentModificationDateKey]).filter{$0.pathExtension=="localdoc" && UUID(uuidString:$0.deletingPathExtension().lastPathComponent) != nil}
+                guard urls.count<=5000 else{throw LocalError.invalid}
+                let recent=urls.sorted{((try? $0.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate) ?? .distantPast)>((try? $1.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate) ?? .distantPast)}.prefix(100)
+                var tasks=[[String:Any]]()
+                for url in recent {
+                    let jobId=url.deletingPathExtension().lastPathComponent.lowercased()
+                    do{
+                        let text=try self.catalog.read(url),meta=try self.catalog.record(text)
+                        let store=NativeDeliveryStore(root:appDirectory){_ = try safeEnvelope($0)}
+                        let planURL=appDirectory.appendingPathComponent("OutputPlans/"+jobId+".json")
+                        var htmlStatus="NOT_REQUESTED"
+                        if FileManager.default.fileExists(atPath:planURL.path){
+                            htmlStatus="PENDING"
+                            if let bytes=try? store.bounded(planURL),let plan=try? JSONSerialization.jsonObject(with:bytes) as? [String:Any],plan["documentHash"] as? String==NativeDeliveryStore.digest(Data(text.utf8)),let html=try? store.bounded(appDirectory.appendingPathComponent("Inbox/"+jobId+".html")),plan["htmlHash"] as? String==NativeDeliveryStore.digest(html){htmlStatus="AVAILABLE"}
+                        }
+                        tasks.append(["jobId":jobId,"title":meta["title"] ?? "本地副本","kind":meta["kind"] ?? "document","status":"SAVED","htmlStatus":htmlStatus,"verification":"PENDING"])
+                    }
+                    catch{tasks.append(["jobId":jobId,"title":"无法读取的保存任务","status":"UNAVAILABLE","verification":"PENDING"])}
+                }
+                self.reply(id,data:tasks)
+            }catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "readTask":
+            guard let jobId=p["jobId"] as? String,jobId.count==36,UUID(uuidString:jobId) != nil else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{
+                let folder=appDirectory.appendingPathComponent("Inbox",isDirectory:true),urls=try FileManager.default.contentsOfDirectory(at:folder,includingPropertiesForKeys:nil)
+                guard let file=urls.first(where:{$0.lastPathComponent.lowercased()==jobId.lowercased()+".localdoc"}) else{throw LocalError.invalid}
+                self.reply(id,data:["text":try self.catalog.read(file)])
+            }catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "repairTaskHtml":
+            guard let jobId=p["jobId"] as? String,let html=p["html"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async{do{let store=NativeDeliveryStore(root:appDirectory){_ = try safeEnvelope($0)};self.reply(id,data:try store.repairHTML(jobId:jobId,html:html))}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "revealTaskHtml":
+            guard let raw=p["jobId"] as? String,let jobId=try? NativeDeliveryStore(root:appDirectory,validate:{_ in}).identifier(raw) else{reply(id,error:LocalError.invalid.rawValue);return}
+            let file=appDirectory.appendingPathComponent("Inbox/"+jobId+".html")
+            guard FileManager.default.fileExists(atPath:file.path) else{reply(id,error:LocalError.io.rawValue);return}
+            NSWorkspace.shared.activateFileViewerSelecting([file]);reply(id,data:true)
         case "save":
             guard let text = p["text"] as? String else { reply(id,error:LocalError.invalid.rawValue); return }
             fileQueue.async { do {
-                let meta = try safeEnvelope(text); let url = self.library.appendingPathComponent(meta.id+".localdoc")
-                try writePrivate(text,to:url)
-                guard try readBounded(url) == text else { throw LocalError.io }
+                try self.catalog.save(text,expectedHash:p["expectedHash"] as? String)
                 self.reply(id,data:["savedAt":ISO8601DateFormatter().string(from:Date()),"location":"本机资料库"])
-            } catch { self.reply(id,error:LocalError.io.rawValue) } }
+            } catch let error as LibraryFailure { self.reply(id,error:error.rawValue) } catch { self.reply(id,error:LocalError.io.rawValue) } }
         case "open":
             let panel = NSOpenPanel(); panel.allowedContentTypes = [.json, UTType(filenameExtension:"localdoc") ?? .data]; panel.allowsMultipleSelection = false
             panel.beginSheetModal(for:window) { response in
                 guard response == .OK, let url = panel.url else { self.reply(id); return }
                 do { self.reply(id,data:["text":try readBounded(url),"name":url.lastPathComponent]) } catch { self.reply(id,error:LocalError.io.rawValue) }
             }
+        case "exportManaged":
+            guard let requestId=p["requestId"] as? String,let text=p["text"] as? String,let name=p["name"] as? String,let kind=p["kind"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{self.reply(id,data:try self.exports.save(requestId:requestId,text:text,name:name,kind:kind))}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "revealManagedExport":
+            guard let requestId=p["exportId"] as? String,let name=p["name"] as? String,let kind=p["kind"] as? String,let hash=p["sha256"] as? String else{reply(id,error:LocalError.invalid.rawValue);return}
+            fileQueue.async {do{let url=try self.exports.verifiedFile(requestId:requestId,name:name,kind:kind,sha256:hash);DispatchQueue.main.async{NSWorkspace.shared.activateFileViewerSelecting([url]);self.reply(id,data:true)}}catch{self.reply(id,error:LocalError.io.rawValue)}}
+        case "revealExports":
+            fileQueue.async {do{let folder=try self.exports.folder();DispatchQueue.main.async{NSWorkspace.shared.activateFileViewerSelecting([folder]);self.reply(id,data:true)}}catch{self.reply(id,error:LocalError.io.rawValue)}}
         case "saveCopy":
             guard let text = p["text"] as? String, (try? safeEnvelope(text)) != nil else { reply(id,error:LocalError.invalid.rawValue); return }
             let panel = NSSavePanel(); panel.nameFieldStringValue = (p["name"] as? String ?? "文档.localdoc"); panel.allowedContentTypes = [UTType(filenameExtension:"localdoc") ?? .data]
@@ -255,14 +344,37 @@ func runNativeHost() {
         let size=header.enumerated().reduce(UInt32(0)) { $0 | (UInt32($1.element) << (8*$1.offset)) }
         guard size > 0,size < 48_000_000 else { throw LocalError.invalid }
         var data=Data(); while data.count<Int(size) { let chunk=input.readData(ofLength:min(1_048_576,Int(size)-data.count)); if chunk.isEmpty { throw LocalError.invalid }; data.append(chunk) }
-        guard let message=try JSONSerialization.jsonObject(with:data) as? [String:Any], message["operation"] as? String=="save", let text=message["text"] as? String else { throw LocalError.invalid }
+        guard let message=try JSONSerialization.jsonObject(with:data) as? [String:Any], let operation=message["operation"] as? String else { throw LocalError.invalid }
+        let delivery = NativeDeliveryStore(root:appDirectory) { _ = try safeEnvelope($0) }
+        if operation == "hello" {
+            respond(["ok":true,"protocolVersion":1,"capabilities":["save-task","query-task","html-output"],"verification":"PENDING"]); return
+        }
+        if operation == "query-task" {
+            guard message["protocolVersion"] as? Int == 1, let jobId=message["jobId"] as? String else { throw DeliveryError.invalid }
+            respond(try delivery.query(jobId:jobId)); return
+        }
+        if operation == "save-task" {
+            guard message["protocolVersion"] as? Int == 1, let jobId=message["jobId"] as? String,
+                  let text=message["text"] as? String, let hash=message["sha256"] as? String else { throw DeliveryError.invalid }
+            let html=message["html"] as? String
+            if message["html"] != nil && html == nil{throw DeliveryError.invalid}
+            let saved = try delivery.save(jobId:jobId,text:text,sha256:hash,html:html,htmlPartial:message["htmlPartial"] as? Bool==true)
+            var reply = saved.reply; reply["opened"] = false
+            if saved.created {
+                let launcher=Process(); launcher.executableURL=URL(fileURLWithPath:"/usr/bin/open"); launcher.arguments=["-a",Bundle.main.bundleURL.path,saved.url.path]; launcher.standardOutput=FileHandle.nullDevice; launcher.standardError=FileHandle.nullDevice
+                do { try launcher.run(); launcher.waitUntilExit(); reply["opened"] = launcher.terminationStatus == 0 } catch { /* Saved receipt remains queryable even if launch fails. */ }
+            }
+            respond(reply); return
+        }
+        guard operation == "save", let text=message["text"] as? String else { throw LocalError.invalid }
         _ = try safeEnvelope(text)
         let requestId=UUID().uuidString, url=appDirectory.appendingPathComponent("Inbox/"+requestId+".localdoc")
         try writePrivate(text,to:url)
         let launcher=Process(); launcher.executableURL=URL(fileURLWithPath:"/usr/bin/open"); launcher.arguments=["-a",Bundle.main.bundleURL.path,url.path]; launcher.standardOutput=FileHandle.nullDevice; launcher.standardError=FileHandle.nullDevice; try launcher.run(); launcher.waitUntilExit()
         guard launcher.terminationStatus==0 else { throw LocalError.io }
         respond(["ok":true,"requestId":requestId,"status":"DELIVERED","verification":"PENDING"])
-    } catch { respond(["ok":false,"code":"LOCAL_DELIVERY_FAILED"]) }
+    } catch let error as DeliveryError { respond(["ok":false,"protocolVersion":1,"code":error.rawValue]) }
+    catch { respond(["ok":false,"code":"LOCAL_DELIVERY_FAILED"]) }
 }
 
 if CommandLine.arguments.contains("--native-host") { runNativeHost() }

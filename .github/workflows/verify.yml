@@ -1,0 +1,22 @@
+name: Verify source and macOS build
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci --prefix app
+      - run: npm test
+      - run: npm run check
+      - run: node scripts/build-app.mjs
+      - run: npm run check:product

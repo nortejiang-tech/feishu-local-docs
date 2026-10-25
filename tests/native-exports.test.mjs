@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';import {mkdtemp,writeFile,readFile} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {createDocument,encodeDocument} from '../shared/model.mjs';import {buildHtmlFile} from '../shared/html-export.mjs';
+test('managed native exports preserve original bytes and reject unsafe destinations',{skip:process.platform!=='darwin'},async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'localdocs-export-test-')),main=path.join(root,'main.swift'),bin=path.join(root,'test');await writeFile(main,await readFile(new URL('./native-exports.swift',import.meta.url)));
+ const build=spawnSync('swiftc',['-swift-version','5','desktop/NativeDelivery.swift','desktop/NativeExports.swift',main,'-o',bin],{encoding:'utf8'});assert.equal(build.status,0,build.stderr);
+ const doc=createDocument('document','Synthetic export');const result=spawnSync(bin,[path.join(root,'data')],{input:JSON.stringify({text:await encodeDocument(doc),html:buildHtmlFile(doc).html}),encoding:'utf8'});assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/PASS native exports/);
+});

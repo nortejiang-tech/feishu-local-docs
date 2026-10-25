@@ -2,14 +2,18 @@ import { encodeDocument, decodeDocument, safeFileName, MAX_FILE_BYTES } from '..
 import { importSnapshot } from '../../shared/import-snapshot.mjs';
 import { parseArchive } from '../../extension/archive.mjs';
 import { DEFAULT_OPERATION_TIMEOUT_MS, withDeadline } from './operation-deadline.mjs';
+import {documentSummary} from '../../shared/library-view.mjs';
 
 export const isNative = () => typeof window.localDocsNative?.request === 'function';
 const native = (action, payload = {}) => window.localDocsNative.request(action, payload);
 let dbPromise;
 let queue = Promise.resolve();
+// Optimistic write preconditions stay in memory, outside portable document data.
+const persistedHashes = new Map();
 const errors = {
   DOCUMENT_INVALID:'文件结构不受支持，原文件未改动。', DOCUMENT_HASH_MISMATCH:'文件校验失败，请使用未损坏的副本。', DOCUMENT_VERSION_UNSUPPORTED:'这个文件版本暂不支持。',
   DOCUMENT_TOO_LARGE:'文件超过当前版本的 32 MB 限制。', FILE_IO_FAILED:'本机文件保存失败，请检查磁盘空间后重试。',
+  FILE_CONFLICT:'本机已有另一个版本，当前编辑仍保留。请保存独立副本后重新打开。',
   FEISHU_IMPORT_FAILED:'飞书导入未完成。请检查飞书连接与权限后重试；原文件未改动。',
   FEISHU_CONNECTION_UNAVAILABLE:'此电脑尚未连接飞书。当前开发版需要已登录的飞书连接组件。',
   OFFICE_UNSUPPORTED_CONTENT:'文件包含当前回导尚不支持的对象，已保留在本地。', NATIVE_TIMEOUT:'操作尚未确认完成，请先检查已有结果，避免重复创建。',
@@ -19,28 +23,105 @@ const errors = {
 function friendly(error) { return new Error(errors[error?.message] || error?.message || '操作未完成，请重试。'); }
 async function database() {
   if (!dbPromise) dbPromise = new Promise((resolve,reject) => {
-    const request=indexedDB.open('local-docs-v2',1);
-    request.onupgradeneeded=()=>request.result.createObjectStore('documents');
-    request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(new Error('无法打开本机资料库。'));
+    const request=indexedDB.open('local-docs-v2',3);
+    let blocked=false;
+    request.onupgradeneeded=()=>{for(const name of ['documents','trash','history'])if(!request.result.objectStoreNames.contains(name))request.result.createObjectStore(name);};
+    request.onsuccess=()=>{if(blocked){request.result.close();return;}request.result.onversionchange=()=>{request.result.close();dbPromise=undefined;};resolve(request.result);};
+    request.onerror=()=>{dbPromise=undefined;reject(new Error('无法打开本机资料库。'));};
+    request.onblocked=()=>{blocked=true;dbPromise=undefined;reject(new Error('资料库升级正在等待其他窗口关闭，请保存副本并关闭旧窗口后重试。'));};
   });
   return dbPromise;
 }
-async function idbAction(mode, operation) {
+async function idbAction(mode, operation,store='documents') {
   const db=await database();
   return new Promise((resolve,reject)=>{
-    const tx=db.transaction('documents',mode), request=operation(tx.objectStore('documents'));
+    const tx=db.transaction(store,mode), request=operation(tx.objectStore(store));
     tx.oncomplete=()=>resolve(request.result);
     tx.onerror=tx.onabort=()=>reject(new Error('本机资料库保存失败，请检查可用空间。'));
   });
 }
+export async function loadLibraryIndex(){
+  try{
+    if(!isNative()){
+      const active=await loadLibrary(),trash=await idbAction('readonly',s=>s.getAll(),'trash');
+      for(const text of trash){try{const summary=documentSummary(await decodeDocument(text));if(summary)active.push({...summary,trashed:true});}catch{}}
+      return active;
+    }
+    const result=await withDeadline(native('listMetadata'),DEFAULT_OPERATION_TIMEOUT_MS);
+    if(!Array.isArray(result?.files))throw Error('DOCUMENT_INVALID');
+    const docs=result.files.map(documentSummary).filter(Boolean);
+    Object.defineProperty(docs,'skipped',{value:(result.skipped||0)+result.files.length-docs.length});return docs;
+  }catch(error){throw friendly(error);}
+}
+export async function loadDocument(id){
+  try{
+    const text=isNative()?(await withDeadline(native('readDocument',{documentId:id}),DEFAULT_OPERATION_TIMEOUT_MS)).text:await idbAction('readonly',s=>s.get(id));
+    const doc=await decodeDocument(text);if(doc.id!==id)throw Error('DOCUMENT_INVALID');
+    persistedHashes.set(doc.id,JSON.parse(text).sha256);return doc;
+  }catch(error){throw friendly(error);}
+}
+function historyRange(id){return IDBKeyRange.bound([id,''],[id,'\uffff']);}
+export async function listHistory(id){
+  try{
+    if(isNative())return await withDeadline(native('listHistory',{documentId:id}),DEFAULT_OPERATION_TIMEOUT_MS);
+    const rows=await idbAction('readonly',s=>s.getAll(historyRange(id)),'history'),result=[];
+    for(const row of rows){try{const doc=await decodeDocument(row.text),hash=JSON.parse(row.text).sha256;if(doc.id===id)result.push({hash,title:doc.title,revision:doc.revision,updatedAt:doc.updatedAt,savedAt:row.savedAt,bytes:new TextEncoder().encode(row.text).length});}catch{}}
+    return result.sort((a,b)=>b.savedAt.localeCompare(a.savedAt)||b.revision-a.revision);
+  }catch(error){throw friendly(error);}
+}
+export async function openHistory(id,hash){
+  try{
+    if(!/^[0-9a-f]{64}$/.test(hash))throw Error('DOCUMENT_INVALID');
+    const text=isNative()?(await withDeadline(native('readHistory',{documentId:id,hash}),DEFAULT_OPERATION_TIMEOUT_MS)).text:(await idbAction('readonly',s=>s.get([id,hash]),'history'))?.text;
+    const doc=await decodeDocument(text);if(doc.id!==id||JSON.parse(text).sha256!==hash)throw Error('DOCUMENT_INVALID');
+    const copy={...doc,id:crypto.randomUUID(),title:`${doc.title} · 历史副本`.slice(0,1000)};
+    if(doc.localMeta){copy.localMeta={...doc.localMeta};delete copy.localMeta.taskId;}
+    return copy;
+  }catch(error){throw friendly(error);}
+}
+async function moveBrowserDocument(id,toTrash){
+  const db=await database(),source=toTrash?'documents':'trash',target=toTrash?'trash':'documents';
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(['documents','trash'],'readwrite'),from=tx.objectStore(source),to=tx.objectStore(target);
+    const read=from.get(id),check=to.get(id);let failure;
+    check.onsuccess=()=>{if(check.result!==undefined){failure=Error('目标已存在同名副本，原文件已保留。');tx.abort();}};
+    read.onsuccess=()=>{if(read.result===undefined){failure=Error('文件不存在，原有资料未改动。');tx.abort();return;}to.put(read.result,id);from.delete(id);};
+    tx.oncomplete=()=>resolve(true);tx.onerror=tx.onabort=()=>reject(failure||Error('本机资料移动未完成，原文件已保留。'));
+  });
+}
+export async function moveLocal(id,toTrash){
+  try{return isNative()?await withDeadline(native(toTrash?'trashDocument':'restoreDocument',{documentId:id}),DEFAULT_OPERATION_TIMEOUT_MS):await moveBrowserDocument(id,toTrash);}
+  catch(error){throw friendly(error);}
+}
+export async function revealLocal(id){
+  if(!isNative())throw Error('浏览器资料库保存在浏览器内，可先保存副本到文件夹。');
+  return native('revealDocument',{documentId:id});
+}
+export async function systemStatus(){
+  if(!isNative())return {native:false,connected:false,version:'网页版',experimentalImport:false};
+  return withDeadline(native('systemStatus'),DEFAULT_OPERATION_TIMEOUT_MS);
+}
+export async function repairConnection(){if(!isNative())throw Error('请在桌面应用中连接Chrome。');return native('connectChrome');}
+export async function showExtension(){if(!isNative())throw Error('请在桌面应用中查看插件。');return native('showExtension');}
+export async function listTasks(){return isNative()?withDeadline(native('listTasks'),DEFAULT_OPERATION_TIMEOUT_MS):[];}
+export async function readTask(jobId){
+  if(!isNative())throw Error('请在桌面应用中查看浏览器保存任务。');
+  const result=await native('readTask',{jobId}),doc=await decodeDocument(result.text);
+  return {...doc,id:crypto.randomUUID(),localMeta:{...doc.localMeta,taskId:jobId}};
+}
+export async function repairTaskHtml(jobId){
+  const result=await native('readTask',{jobId}),doc=await decodeDocument(result.text);
+  const {buildHtmlFile}=await import('../../shared/html-export.mjs');
+  return withDeadline(native('repairTaskHtml',{jobId,html:buildHtmlFile(doc).html}),DEFAULT_OPERATION_TIMEOUT_MS);
+}
+export function revealTaskHtml(jobId){return native('revealTaskHtml',{jobId});}
 export async function loadLibrary() {
   try {
     const result=isNative() ? await withDeadline(native('list'), DEFAULT_OPERATION_TIMEOUT_MS) : await idbAction('readonly',s=>s.getAll());
     const texts=Array.isArray(result)?result:result.files;
     const docs=[]; let skipped=Array.isArray(result)?0:(result.skipped||0);
     for (const text of texts) {
-      try { const doc=await decodeDocument(text); if(doc.kind==='slides'){skipped++;continue} docs.push(doc); }
+      try { const doc=await decodeDocument(text); if(doc.kind==='slides'){skipped++;continue} persistedHashes.set(doc.id,JSON.parse(text).sha256);docs.push(doc); }
       catch { skipped++; }
     }
     docs.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
@@ -57,10 +138,34 @@ export function saveLocal(doc) {
     const text=encoded.text;
     // A timed out bridge call may still finish in native code. The native fileQueue remains
     // the serialization boundary for writes that were already sent.
-    if (isNative()) return withDeadline(native('save',{text}), DEFAULT_OPERATION_TIMEOUT_MS).catch(error=>{ if(error?.message==='OPERATION_TIMEOUT')throw new Error('SAVE_UNCONFIRMED'); throw error; });
-    await idbAction('readwrite',s=>s.put(text,doc.id));
+    const expectedHash=persistedHashes.get(doc.id);
+    if (isNative()) {
+      const result=await withDeadline(native('save',{text,...(expectedHash?{expectedHash}:{})}), DEFAULT_OPERATION_TIMEOUT_MS).catch(error=>{ if(error?.message==='OPERATION_TIMEOUT')throw new Error('SAVE_UNCONFIRMED'); throw error; });
+      persistedHashes.set(doc.id,JSON.parse(text).sha256);return result;
+    }
+    const db=await database();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(['documents','trash','history'],'readwrite'),check=tx.objectStore('trash').get(doc.id);let failure='FILE_IO_FAILED';
+      check.onsuccess=()=>{
+        if(check.result!==undefined){failure='FILE_CONFLICT';tx.abort();return;}
+        const current=tx.objectStore('documents').get(doc.id);
+        current.onsuccess=()=>{try{
+          if(current.result!==undefined&&current.result!==text){
+            const stored=JSON.parse(current.result),previous=stored.document;if(!Number.isSafeInteger(previous?.revision))throw Error();if(!expectedHash||stored.sha256!==expectedHash||previous.revision>=doc.revision){failure='FILE_CONFLICT';tx.abort();return;}
+            const history=tx.objectStore('history');history.put({text:current.result,savedAt:new Date().toISOString()},[doc.id,stored.sha256]);
+            const records=history.getAll(historyRange(doc.id));records.onsuccess=()=>{
+              const rows=records.result.sort((a,b)=>b.savedAt.localeCompare(a.savedAt)||JSON.parse(b.text).document.revision-JSON.parse(a.text).document.revision);let bytes=0;
+              for(let i=0;i<rows.length;i++){bytes+=new TextEncoder().encode(rows[i].text).length;if(i>=10||(i>0&&bytes>64*1024*1024))history.delete([doc.id,JSON.parse(rows[i].text).sha256]);}
+            };
+          }
+          tx.objectStore('documents').put(text,doc.id);
+        }catch{tx.abort();}};
+      };
+      tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(new Error(failure));
+    });
     const stored=await idbAction('readonly',s=>s.get(doc.id));
     if (stored!==text) throw new Error('FILE_IO_FAILED');
+    persistedHashes.set(doc.id,JSON.parse(text).sha256);
     return {savedAt:new Date().toISOString(),location:'此浏览器的本机资料库'};
   });
   queue=operation;
@@ -76,8 +181,10 @@ async function decodeAny(text) {
 async function pickBrowserFile() {
   return new Promise(resolve=>{
     const input=document.createElement('input'); input.type='file'; input.accept='.localdoc,.json';
-    input.onchange=()=>resolve(input.files?.[0] || null);
-    input.oncancel=()=>resolve(null); input.click();
+    input.hidden=true;document.body.append(input);
+    const finish=file=>{input.remove();resolve(file);};
+    input.onchange=()=>finish(input.files?.[0] || null);
+    input.oncancel=()=>finish(null); input.click();
   });
 }
 export async function openLocal() {
@@ -90,21 +197,33 @@ export async function openLocal() {
     return {...imported,id:crypto.randomUUID()};
   } catch(error) { throw friendly(error); }
 }
-export async function exportLocal(doc) {
+export function revealExports(){return native('revealExports');}
+export function revealManagedExport(result){return native('revealManagedExport',{exportId:result.exportId,name:result.name,kind:result.kind,sha256:result.sha256});}
+async function managedExport(text,name,kind){
+  const extension='.'+kind;let stem=Array.from(name.slice(0,-extension.length));
+  while(new TextEncoder().encode(stem.join('')+extension).length>240)stem.pop();
+  name=(stem.join('')||'文档')+extension;
+  const expected=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),v=>v.toString(16).padStart(2,'0')).join('');
+  const requestId=crypto.randomUUID();
+  const result=await withDeadline(native('exportManaged',{requestId,text,name,kind}),DEFAULT_OPERATION_TIMEOUT_MS).catch(error=>{if(error?.message==='OPERATION_TIMEOUT')throw Error('导出尚未确认完成，请在“打开本机导出文件夹”中检查已有结果。');throw error;});
+  if(result?.sha256!==expected||result?.exportId!==requestId||result?.name!==name||result?.kind!==kind)throw Error('导出未通过完整性确认，请在本机导出文件夹中检查结果。');
+  return result;
+}
+export async function exportLocal(doc,{chooseLocation=false}={}) {
   try {
     const text=await encodeDocument(doc), name=safeFileName(doc.title);
-    if(isNative())return await native('saveCopy',{text,name});
+    if(isNative())return chooseLocation?await native('saveCopy',{text,name}):await managedExport(text,name,'localdoc');
     const url=URL.createObjectURL(new Blob([text],{type:'application/octet-stream'}));
     const a=document.createElement('a'); a.href=url;a.download=name; document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
     return {cancelled:false,initiated:true};
   } catch(error) { throw friendly(error); }
 }
-export async function exportHtml(doc) {
+export async function exportHtml(doc,{chooseLocation=false}={}) {
   try {
     const {buildHtmlFile}=await import('../../shared/html-export.mjs');
     const output=buildHtmlFile(doc);
     let result;
-    if(isNative()) result=await native('saveHtml',{text:output.html,name:output.name});
+    if(isNative()) result=chooseLocation?await native('saveHtml',{text:output.html,name:output.name}):await managedExport(output.html,output.name,'html');
     else {
       const url=URL.createObjectURL(new Blob([output.html],{type:'text/html;charset=utf-8'}));
       const a=document.createElement('a');a.href=url;a.download=output.name;
@@ -133,7 +252,8 @@ export function watchIncoming(callback) {
   const handle=async event=>{
     try {
       const doc=await decodeAny(event.detail.text);
-      if(alive)await callback({...doc,id:crypto.randomUUID()});
+      const taskId=typeof event.detail.name==='string'&&/^[0-9a-f-]{36}\.localdoc$/i.test(event.detail.name)?event.detail.name.slice(0,-9).toLowerCase():null;
+      if(alive)await callback({...doc,id:crypto.randomUUID(),...(taskId?{localMeta:{...doc.localMeta,taskId}}:{})});
     } catch(error) { window.dispatchEvent(new CustomEvent('localdocs:error',{detail:friendly(error).message})); }
   };
   window.addEventListener('localdocs:incoming',handle);

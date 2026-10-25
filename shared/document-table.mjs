@@ -1,3 +1,5 @@
+import { assembleDocumentTree } from './document-tree.mjs';
+
 const MAX_TABLE_CELLS = 20_000;
 const MAX_CONTENT_DEPTH = 32;
 
@@ -44,33 +46,76 @@ export function buildEditableTable(tableBlock, blocksById, convertBlock) {
   const seenBody = new Set();
   const issues = new Set();
 
-  function bodyNodes(root) {
-    const nodes = [];
-    const stack = [{ block: root, depth: 0, ancestry: new Set() }];
+  // A list-item callback wraps its own paragraph in a one-item list container.
+  // The tree assembler groups sibling items and nests children itself, so the
+  // wrapper is unwrapped back to the item's own content blocks.
+  function unwrapOwnNodes(type, own) {
+    const normalized = type.toLowerCase();
+    if (!['ordered', 'bullet', 'todo', 'ordered_list_item', 'orderedlistitem', 'bullet_list_item', 'bulletitem', 'task_item', 'taskitem', 'todo_item', 'todoitem'].includes(normalized)) return own;
+    if (own.length !== 1 || !object(own[0]) || !Array.isArray(own[0].content) || own[0].content.length !== 1) return own;
+    const expected = normalized.includes('ordered') ? ['orderedList','listItem'] : normalized.includes('bullet') ? ['bulletList','listItem'] : ['taskList','taskItem'];
+    const container = own[0].content[0];
+    if (own[0].type !== expected[0] || !object(container) || container.type !== expected[1] || !Array.isArray(container.content)) return own;
+    return container.content;
+  }
+
+  function cellRenderLeaf(block) {
+    const own = convertBlock(block);
+    if (!Array.isArray(own)) throw new Error('TABLE_CELL_BLOCK_INVALID');
+    return { nodes: unwrapOwnNodes(block.type, own), consumed: [] };
+  }
+
+  // Validate the whole descendant graph first: bounded depth, no cycles, no
+  // shared or missing children, unique consumption, and no nested tables/cells.
+  function gatherCellForest(rootIds, cellId) {
+    if (!Array.isArray(rootIds)) return null;
+    const roots = [];
+    const seenRoots = new Set();
+    const stack = rootIds.map(id => ({ id, parent: cellId, depth: 1 }));
     while (stack.length) {
-      const { block, depth, ancestry } = stack.pop();
-      if (depth > MAX_CONTENT_DEPTH || !block || ancestry.has(block.id) || seenBody.has(block.id)) return null;
-      if (block.type.toLowerCase() === 'table' || block.type.toLowerCase() === 'table_cell') return null;
-      seenBody.add(block.id); consumed.add(block.id);
-      const children = block.children;
-      if (!Array.isArray(children)) return null;
-      const nextAncestry = new Set(ancestry); nextAncestry.add(block.id);
-      const childBlocks = [];
-      for (const id of children) {
-        const child = blocksById.get(id);
-        if (!child || child.parentId !== block.id) return null;
-        childBlocks.push(child);
-      }
-      const own = convertBlock(block);
-      if (!Array.isArray(own)) return null;
-      nodes.push(...own);
-      if (childBlocks.length) {
-        for (let index = childBlocks.length - 1; index >= 0; index--) {
-          stack.push({ block: childBlocks[index], depth: depth + 1, ancestry: nextAncestry });
-        }
+      const { id, parent, depth } = stack.pop();
+      if (typeof id !== 'string' || !id) return null;
+      const block = blocksById.get(id);
+      if (!block || depth > MAX_CONTENT_DEPTH || seenBody.has(id) || block.parentId !== parent) return null;
+      const normalized = block.type.toLowerCase();
+      if (normalized === 'table' || normalized === 'table_cell') return null;
+      if (!Array.isArray(block.children)) return null;
+      seenBody.add(id); consumed.add(id);
+      for (const childId of block.children) stack.push({ id: childId, parent: id, depth: depth + 1 });
+    }
+    for (const id of rootIds) {
+      if (seenRoots.has(id)) return null;
+      seenRoots.add(id);
+      const block = blocksById.get(id);
+      if (!block) return null;
+      roots.push(block);
+    }
+    return roots;
+  }
+
+  function assembleCellNodes(roots) {
+    if (!roots.length) return [];
+    const blocks = new Map();
+    const stack = [...roots];
+    while (stack.length) {
+      const block = stack.pop();
+      if (blocks.has(block.id)) continue;
+      blocks.set(block.id, block);
+      for (const childId of block.children) {
+        const child = blocksById.get(childId);
+        if (!child) return null;
+        stack.push(child);
       }
     }
-    return nodes;
+    let assembled;
+    try {
+      assembled = assembleDocumentTree([...blocks.values()], roots.map(block => block.id), cellRenderLeaf);
+    } catch {
+      return null;
+    }
+    if (!object(assembled) || !Array.isArray(assembled.nodes)) return null;
+    for (const issue of assembled.issues) issues.add(issue);
+    return assembled.nodes;
   }
 
   function consumeEmptyCovered(source) {
@@ -109,18 +154,16 @@ export function buildEditableTable(tableBlock, blocksById, convertBlock) {
       }
       consumed.add(cell.blockId);
       const childNodes = [];
-      for (const childId of cell.source.children) {
-        const child = blocksById.get(childId);
-        if (!child || child.parentId !== cell.blockId) return null;
-        const converted = bodyNodes(child);
-        if (converted === null) return null;
-        childNodes.push(...converted);
-      }
       if (cell.source.text) {
         const own = convertBlock(cell.source);
         if (!Array.isArray(own)) return null;
-        childNodes.unshift(...own);
+        childNodes.push(...own);
       }
+      const roots = gatherCellForest(cell.source.children, cell.blockId);
+      if (roots === null) return null;
+      const assembled = assembleCellNodes(roots);
+      if (assembled === null) return null;
+      childNodes.push(...assembled);
       const content = childNodes.length ? childNodes : [{ type: 'paragraph' }];
       const attrs = {};
       if (cell.rowSpan > 1) attrs.rowspan = cell.rowSpan;
