@@ -9,7 +9,7 @@ export async function captureResources(options = {}) {
   const allowedMime=/^image\/(?:png|jpeg|webp)$/;
   const started=Date.now(), assets=[], issues=[];
   let total=0;
-  const maxBytes=6*1024*1024, totalLimit=14*1024*1024;
+  const maxBytes=6*1024*1024, totalLimit=Number.isSafeInteger(options.byteBudget)&&options.byteBudget>=0?Math.min(options.byteBudget,14*1024*1024):14*1024*1024;
   const urls=[];
   try {
     for (const img of document.querySelectorAll('img')) if (typeof img.currentSrc==='string') urls.push(img.currentSrc);

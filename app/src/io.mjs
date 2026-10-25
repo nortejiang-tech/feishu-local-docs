@@ -2,6 +2,7 @@ import { encodeDocument, decodeDocument, safeFileName, MAX_FILE_BYTES } from '..
 import { importSnapshot } from '../../shared/import-snapshot.mjs';
 import { parseArchive } from '../../extension/archive.mjs';
 import { DEFAULT_OPERATION_TIMEOUT_MS, withDeadline } from './operation-deadline.mjs';
+import {documentSummary} from '../../shared/library-view.mjs';
 
 export const isNative = () => typeof window.localDocsNative?.request === 'function';
 const native = (action, payload = {}) => window.localDocsNative.request(action, payload);
@@ -10,6 +11,7 @@ let queue = Promise.resolve();
 const errors = {
   DOCUMENT_INVALID:'文件结构不受支持，原文件未改动。', DOCUMENT_HASH_MISMATCH:'文件校验失败，请使用未损坏的副本。', DOCUMENT_VERSION_UNSUPPORTED:'这个文件版本暂不支持。',
   DOCUMENT_TOO_LARGE:'文件超过当前版本的 32 MB 限制。', FILE_IO_FAILED:'本机文件保存失败，请检查磁盘空间后重试。',
+  FILE_CONFLICT:'本机已有另一个版本，当前编辑仍保留。请保存独立副本后重新打开。',
   FEISHU_IMPORT_FAILED:'飞书导入未完成。请检查飞书连接与权限后重试；原文件未改动。',
   FEISHU_CONNECTION_UNAVAILABLE:'此电脑尚未连接飞书。当前开发版需要已登录的飞书连接组件。',
   OFFICE_UNSUPPORTED_CONTENT:'文件包含当前回导尚不支持的对象，已保留在本地。', NATIVE_TIMEOUT:'操作尚未确认完成，请先检查已有结果，避免重复创建。',
@@ -19,21 +21,76 @@ const errors = {
 function friendly(error) { return new Error(errors[error?.message] || error?.message || '操作未完成，请重试。'); }
 async function database() {
   if (!dbPromise) dbPromise = new Promise((resolve,reject) => {
-    const request=indexedDB.open('local-docs-v2',1);
-    request.onupgradeneeded=()=>request.result.createObjectStore('documents');
+    const request=indexedDB.open('local-docs-v2',2);
+    request.onupgradeneeded=()=>{for(const name of ['documents','trash'])if(!request.result.objectStoreNames.contains(name))request.result.createObjectStore(name);};
     request.onsuccess=()=>resolve(request.result);
     request.onerror=()=>reject(new Error('无法打开本机资料库。'));
   });
   return dbPromise;
 }
-async function idbAction(mode, operation) {
+async function idbAction(mode, operation,store='documents') {
   const db=await database();
   return new Promise((resolve,reject)=>{
-    const tx=db.transaction('documents',mode), request=operation(tx.objectStore('documents'));
+    const tx=db.transaction(store,mode), request=operation(tx.objectStore(store));
     tx.oncomplete=()=>resolve(request.result);
     tx.onerror=tx.onabort=()=>reject(new Error('本机资料库保存失败，请检查可用空间。'));
   });
 }
+export async function loadLibraryIndex(){
+  try{
+    if(!isNative()){
+      const active=await loadLibrary(),trash=await idbAction('readonly',s=>s.getAll(),'trash');
+      for(const text of trash){try{const summary=documentSummary(await decodeDocument(text));if(summary)active.push({...summary,trashed:true});}catch{}}
+      return active;
+    }
+    const result=await withDeadline(native('listMetadata'),DEFAULT_OPERATION_TIMEOUT_MS);
+    if(!Array.isArray(result?.files))throw Error('DOCUMENT_INVALID');
+    const docs=result.files.map(documentSummary).filter(Boolean);
+    Object.defineProperty(docs,'skipped',{value:(result.skipped||0)+result.files.length-docs.length});return docs;
+  }catch(error){throw friendly(error);}
+}
+export async function loadDocument(id){
+  try{
+    const text=isNative()?(await withDeadline(native('readDocument',{documentId:id}),DEFAULT_OPERATION_TIMEOUT_MS)).text:await idbAction('readonly',s=>s.get(id));
+    const doc=await decodeDocument(text);if(doc.id!==id)throw Error('DOCUMENT_INVALID');return doc;
+  }catch(error){throw friendly(error);}
+}
+async function moveBrowserDocument(id,toTrash){
+  const db=await database(),source=toTrash?'documents':'trash',target=toTrash?'trash':'documents';
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(['documents','trash'],'readwrite'),from=tx.objectStore(source),to=tx.objectStore(target);
+    const read=from.get(id),check=to.get(id);let failure;
+    check.onsuccess=()=>{if(check.result!==undefined){failure=Error('目标已存在同名副本，原文件已保留。');tx.abort();}};
+    read.onsuccess=()=>{if(read.result===undefined){failure=Error('文件不存在，原有资料未改动。');tx.abort();return;}to.put(read.result,id);from.delete(id);};
+    tx.oncomplete=()=>resolve(true);tx.onerror=tx.onabort=()=>reject(failure||Error('本机资料移动未完成，原文件已保留。'));
+  });
+}
+export async function moveLocal(id,toTrash){
+  try{return isNative()?await withDeadline(native(toTrash?'trashDocument':'restoreDocument',{documentId:id}),DEFAULT_OPERATION_TIMEOUT_MS):await moveBrowserDocument(id,toTrash);}
+  catch(error){throw friendly(error);}
+}
+export async function revealLocal(id){
+  if(!isNative())throw Error('浏览器资料库保存在浏览器内，可先保存副本到文件夹。');
+  return native('revealDocument',{documentId:id});
+}
+export async function systemStatus(){
+  if(!isNative())return {native:false,connected:false,version:'网页版',experimentalImport:false};
+  return withDeadline(native('systemStatus'),DEFAULT_OPERATION_TIMEOUT_MS);
+}
+export async function repairConnection(){if(!isNative())throw Error('请在桌面应用中连接Chrome。');return native('connectChrome');}
+export async function showExtension(){if(!isNative())throw Error('请在桌面应用中查看插件。');return native('showExtension');}
+export async function listTasks(){return isNative()?withDeadline(native('listTasks'),DEFAULT_OPERATION_TIMEOUT_MS):[];}
+export async function readTask(jobId){
+  if(!isNative())throw Error('请在桌面应用中查看浏览器保存任务。');
+  const result=await native('readTask',{jobId}),doc=await decodeDocument(result.text);
+  return {...doc,id:crypto.randomUUID(),localMeta:{...doc.localMeta,taskId:jobId}};
+}
+export async function repairTaskHtml(jobId){
+  const result=await native('readTask',{jobId}),doc=await decodeDocument(result.text);
+  const {buildHtmlFile}=await import('../../shared/html-export.mjs');
+  return withDeadline(native('repairTaskHtml',{jobId,html:buildHtmlFile(doc).html}),DEFAULT_OPERATION_TIMEOUT_MS);
+}
+export function revealTaskHtml(jobId){return native('revealTaskHtml',{jobId});}
 export async function loadLibrary() {
   try {
     const result=isNative() ? await withDeadline(native('list'), DEFAULT_OPERATION_TIMEOUT_MS) : await idbAction('readonly',s=>s.getAll());
@@ -58,7 +115,19 @@ export function saveLocal(doc) {
     // A timed out bridge call may still finish in native code. The native fileQueue remains
     // the serialization boundary for writes that were already sent.
     if (isNative()) return withDeadline(native('save',{text}), DEFAULT_OPERATION_TIMEOUT_MS).catch(error=>{ if(error?.message==='OPERATION_TIMEOUT')throw new Error('SAVE_UNCONFIRMED'); throw error; });
-    await idbAction('readwrite',s=>s.put(text,doc.id));
+    const db=await database();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(['documents','trash'],'readwrite'),check=tx.objectStore('trash').get(doc.id);let failure='FILE_IO_FAILED';
+      check.onsuccess=()=>{
+        if(check.result!==undefined){failure='FILE_CONFLICT';tx.abort();return;}
+        const current=tx.objectStore('documents').get(doc.id);
+        current.onsuccess=()=>{try{
+          if(current.result!==undefined&&current.result!==text){const previous=JSON.parse(current.result).document;if(!Number.isSafeInteger(previous?.revision))throw Error();if(previous.revision>=doc.revision){failure='FILE_CONFLICT';tx.abort();return;}}
+          tx.objectStore('documents').put(text,doc.id);
+        }catch{tx.abort();}};
+      };
+      tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(new Error(failure));
+    });
     const stored=await idbAction('readonly',s=>s.get(doc.id));
     if (stored!==text) throw new Error('FILE_IO_FAILED');
     return {savedAt:new Date().toISOString(),location:'此浏览器的本机资料库'};
@@ -76,8 +145,10 @@ async function decodeAny(text) {
 async function pickBrowserFile() {
   return new Promise(resolve=>{
     const input=document.createElement('input'); input.type='file'; input.accept='.localdoc,.json';
-    input.onchange=()=>resolve(input.files?.[0] || null);
-    input.oncancel=()=>resolve(null); input.click();
+    input.hidden=true;document.body.append(input);
+    const finish=file=>{input.remove();resolve(file);};
+    input.onchange=()=>finish(input.files?.[0] || null);
+    input.oncancel=()=>finish(null); input.click();
   });
 }
 export async function openLocal() {
@@ -133,7 +204,8 @@ export function watchIncoming(callback) {
   const handle=async event=>{
     try {
       const doc=await decodeAny(event.detail.text);
-      if(alive)await callback({...doc,id:crypto.randomUUID()});
+      const taskId=typeof event.detail.name==='string'&&/^[0-9a-f-]{36}\.localdoc$/i.test(event.detail.name)?event.detail.name.slice(0,-9).toLowerCase():null;
+      if(alive)await callback({...doc,id:crypto.randomUUID(),...(taskId?{localMeta:{...doc.localMeta,taskId}}:{})});
     } catch(error) { window.dispatchEvent(new CustomEvent('localdocs:error',{detail:friendly(error).message})); }
   };
   window.addEventListener('localdocs:incoming',handle);

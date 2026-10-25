@@ -8,7 +8,7 @@ import {build} from '../app/node_modules/vite/dist/node/index.js';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const run=(bin,args,cwd=root)=>{const p=spawnSync(bin,args,{cwd,stdio:'inherit'});if(p.status!==0)throw new Error(`${bin} failed (${p.status})`)};
 const extensionOnly=process.argv.includes('--extension-only');
-const appVersion='0.2.8';
+const appVersion='0.4.0';
 const outputArgument=process.argv.find(value=>value.startsWith('--application-output='));
 const applicationOutput=outputArgument?.slice('--application-output='.length);
 if(applicationOutput && !path.isAbsolute(applicationOutput))throw new Error('Application output must be an absolute path');
@@ -16,9 +16,9 @@ if(!extensionOnly)run('npm',['run','build'],path.join(root,'app'));
 const identity=JSON.parse(await readFile(path.join(root,'extension-next/identity.json'),'utf8'));
 const extension=path.join(root,`dist/chrome-extension-${appVersion}`);
 await build({configFile:false,build:{target:'es2022',outDir:extension,emptyOutDir:true,lib:{entry:path.join(root,'extension-next/src/background.mjs'),formats:['es'],fileName:()=>'background.js'},minify:false}});
-await cp(path.join(root,'extension-next/src/popup.mjs'),path.join(extension,'popup.js'));
+await build({configFile:false,build:{target:'es2022',outDir:extension,emptyOutDir:false,lib:{entry:path.join(root,'extension-next/src/popup.mjs'),formats:['es'],fileName:()=>'popup.js'},minify:false}});
 for(const f of ['popup.html','popup.css'])await cp(path.join(root,'extension-next',f),path.join(extension,f));
-await writeFile(path.join(extension,'manifest.json'),JSON.stringify({manifest_version:3,name:'本地文档 · 飞书助手',version:appVersion,key:identity.publicKey,description:'将当前飞书文档送到本地编辑器。当前采集完整性仍在验证。',minimum_chrome_version:'106',permissions:['activeTab','scripting','nativeMessaging'],action:{default_popup:'popup.html',default_title:'保存到本地'},background:{service_worker:'background.js',type:'module'},content_security_policy:{extension_pages:"script-src 'self'; object-src 'none'; connect-src 'none'; img-src 'self' data:; base-uri 'none'"}},null,2)+'\n');
+await writeFile(path.join(extension,'manifest.json'),JSON.stringify({manifest_version:3,name:'本地文档 · 浏览器助手',version:appVersion,key:identity.publicKey,description:'将当前飞书文档送到本地编辑器，可查看保存任务。当前采集完整性仍在验证。',minimum_chrome_version:'106',permissions:['activeTab','scripting','nativeMessaging','storage'],action:{default_popup:'popup.html',default_title:'保存到本地'},background:{service_worker:'background.js',type:'module'},content_security_policy:{extension_pages:"script-src 'self'; object-src 'none'; connect-src 'none'; img-src 'self' data:; base-uri 'none'"}},null,2)+'\n');
 if(extensionOnly) { console.log(JSON.stringify({status:'BUILT',extension,version:appVersion,extensionId:identity.extensionId})); process.exit(0); }
 const bundle=applicationOutput || path.join(root,`dist/本地文档-${appVersion}.app`);
 const staging=await mkdtemp(path.join(os.tmpdir(),'localdocs-build-'));
@@ -43,7 +43,9 @@ for(const entry of Object.keys(lock.packages).filter(p=>p.startsWith('node_modul
 }
 await writeFile(path.join(contents,'Resources/THIRD-PARTY-NOTICES.txt'),notices);
 await writeFile(path.join(contents,'Resources/native-host'),'#!/bin/sh\nexec "$(dirname "$0")/../MacOS/LocalDocs" --native-host "$@"\n');await chmod(path.join(contents,'Resources/native-host'),0o755);
-run('swiftc',['-swift-version','5','-O','-target','arm64-apple-macosx13.0',path.join(root,'desktop/LocalDocs.swift'),'-o',path.join(contents,'MacOS/LocalDocs')]);
+const nativeSource=path.join(staging,'LocalDocs.swift');
+await writeFile(nativeSource,(await readFile(path.join(root,'desktop/NativeDelivery.swift'),'utf8'))+'\n'+(await readFile(path.join(root,'desktop/NativeLibrary.swift'),'utf8'))+'\n'+await readFile(path.join(root,'desktop/LocalDocs.swift'),'utf8'));
+run('swiftc',['-swift-version','5','-O','-target','arm64-apple-macosx13.0',nativeSource,'-o',path.join(contents,'MacOS/LocalDocs')]);
 // Sign outside File Provider locations, which can reattach Finder metadata while signing.
 run('/usr/bin/codesign',['--force','--sign','-',stagedBundle]);
 await rm(bundle,{recursive:true,force:true});

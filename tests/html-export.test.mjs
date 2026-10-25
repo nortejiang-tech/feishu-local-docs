@@ -79,3 +79,13 @@ test('formula with no cache is retained as formula text',()=>{
   const doc=book();doc.content.sheets['sheet-1'].cellData={0:{0:{f:'=A2+2'}}};
   const out=buildHtmlFile(doc);assert.match(out.html,/>=A2\+2<\/td>/);assert.ok(out.warnings.some(w=>w.includes('缺少结果')));
 });
+test('HTML carries per-source-sheet diagnostics, escapes names and never upgrades coverage after local editing',()=>{
+  const doc=book();
+  doc.provenance.capture={kind:'sheet',model:{sheets:[{index:0,name:'<img src=x onerror=alert(1)>',rows:2,columns:3,loadCoverage:'complete',cells:[{row:0,column:0,value:0,display:'0',formula:null,style:null}],merges:[]},{index:1,name:'style-only',rows:1,columns:1,cells:[{row:0,column:0,value:null,display:'',formula:null,style:{_font:'11px Arial'}}],merges:[]}]}};
+  doc.content.sheets['sheet-1'].cellData={0:{0:{v:'LOCAL_EDIT'}}};
+  const out=buildHtmlFile(doc);
+  assert.match(out.html,/data-sheet-audit="1"/);assert.match(out.html,/空白或未加载/);
+  assert.match(out.html,/每张工作表的完整性目前均未知/);assert.match(out.html,/&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(out.html,/<img src=x/);assert.match(out.html,/>LOCAL_EDIT<\/td>/);
+  assert.equal(doc.provenance.capture.model.sheets[0].cells[0].value,0);
+});

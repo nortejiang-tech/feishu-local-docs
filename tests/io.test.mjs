@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDocument,encodeDocument,decodeDocument} from '../shared/model.mjs';
-import {loadLibrary,saveLocal,openLocal,exportHtml} from '../app/src/io.mjs';
+import {loadLibrary,loadLibraryIndex,loadDocument,saveLocal,openLocal,exportHtml} from '../app/src/io.mjs';
 
 test('library retains valid files while isolating corrupt or unsupported files',async()=>{
  const doc=createDocument('document','Good');
@@ -31,4 +31,16 @@ test('HTML export uses its dedicated native action, preserves source and propaga
  const result=await exportHtml(doc);assert.equal(result.cancelled,false);assert.equal(calls[0].action,'saveHtml');assert.equal(calls[0].payload.name,'Reading copy.html');assert.match(calls[0].payload.text,/<!doctype html>/);assert.equal(JSON.stringify(doc),before);
  response={cancelled:true};assert.equal((await exportHtml(doc)).cancelled,true);
  response=Error('FILE_IO_FAILED');await assert.rejects(exportHtml(doc),/保存失败/);
+});
+
+test('native startup reads summaries and hydrates only the requested document',async()=>{
+ const doc=createDocument('document','Lazy file'),text=await encodeDocument(doc),calls=[];
+ globalThis.window={localDocsNative:{request:async(action,payload)=>{calls.push(action);if(action==='listMetadata')return {files:[{...doc,summary:true,content:undefined,issues:undefined}],skipped:2};assert.equal(action,'readDocument');assert.ok(payload.documentId);return {text};}}};
+ const files=await loadLibraryIndex();assert.equal(files.length,1);assert.equal(files.skipped,2);assert.equal(files[0].summary,true);assert.equal(files[0].content,undefined);assert.deepEqual(calls,['listMetadata']);
+ assert.equal((await loadDocument(doc.id)).title,doc.title);assert.deepEqual(calls,['listMetadata','readDocument']);
+ await assert.rejects(loadDocument(crypto.randomUUID()),/文件结构/);
+});
+test('native conflicting save keeps the recovery message actionable',async()=>{
+ globalThis.window={localDocsNative:{request:async()=>{throw Error('FILE_CONFLICT');}}};
+ await assert.rejects(saveLocal(createDocument()),/保存独立副本/);
 });

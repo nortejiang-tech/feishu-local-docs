@@ -3,6 +3,7 @@ import {buildSheetLayout} from './html-sheet-layout.mjs';
 import {buildWhiteboardScene} from './whiteboard-scene.mjs';
 import {buildBaseGrid} from './base-grid.mjs';
 import {baseDateInput} from './base-date.mjs';
+import {buildSheetAudit} from './sheet-audit.mjs';
 
 // No captured markup, URLs, CSS declarations or scripts are passed through.
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -173,16 +174,23 @@ function workbookHtml(doc,ctx) {
 
 const css=`*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:#1f2329;background:#f4f6f9;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}header,main,nav{margin:24px auto;max-width:1120px;padding:24px 36px;background:white;border-radius:10px}header h1{font-size:26px;margin:0 0 12px}.meta{color:#697586;font-size:13px}nav a{display:inline-block;margin:4px 18px 4px 0;color:#2864df;text-decoration:none}h1,h2,h3,h4,h5,h6{line-height:1.35;scroll-margin-top:20px}p{white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0}blockquote{border-left:3px solid #b7c3d5;margin-left:0;padding:4px 20px;color:#576579}pre{background:#f6f7f9;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere}code{font-family:monospace}img{max-width:100%;height:auto}table{border-collapse:collapse}th,td{border:1px solid #c6cbd3;padding:5px 8px;white-space:pre-wrap;vertical-align:top}th{background:#f0f3f7;text-align:left}td p,th p{margin:4px 0}.document-table{min-width:50%;width:100%}.table-scroll{overflow:auto;max-width:100%;margin:12px 0}.sheet-grid{table-layout:fixed;font:11pt Arial,sans-serif}.sheet-grid td{padding:2px 4px;vertical-align:middle;overflow:hidden}.sheet{margin:0 0 40px}.missing,.warning{border:1px solid #e9c37a;background:#fffbef;padding:12px 16px;border-radius:6px;margin:16px 0}.warning ul{margin:8px 0}details{margin:12px 0}summary{cursor:pointer}.columns{display:flex;gap:24px}.column{min-width:0}.tasks{list-style:none;padding-left:12px}.board{margin:16px 0}.board svg{width:100%;max-height:700px;border:1px solid #d5dae2}figcaption{font-size:13px;color:#667085}hr{border:0;border-top:1px solid #d5dae2;margin:24px 0}@media(max-width:700px){header,main,nav{padding:16px;margin:12px}.columns{overflow:auto}}@media print{body{background:white}header,main,nav{max-width:none;padding:0;border-radius:0}nav{display:none}.table-scroll{overflow:visible}.sheet{break-before:page}}`;
 
+function sheetAuditHtml(report) {
+  if(!report)return '';
+  return `<details class="warning" data-sheet-audit="1"><summary>采集检查：${report.totals.sheets} 个工作表 · 加载完整性待核对</summary><p>以下是采集时留存的快照，不随本地编辑改写。范围和样式数量不代表内容已经完整加载；计数可重叠。</p><div class="table-scroll"><table><thead><tr><th>工作表</th><th>范围</th><th>有值</th><th>显示文字</th><th>公式</th><th>样式</th><th>合并</th><th>读取状态</th></tr></thead><tbody>${report.sheets.map(s=>`<tr><th>${esc(s.name)}</th><td>${s.rows} × ${s.columns}</td><td>${s.valueCells}</td><td>${s.displayCells}</td><td>${s.formulaCells}</td><td>${s.styledCells}</td><td>${s.merges}</td><td>${s.state==='EMPTY_OR_UNLOADED'?'空白或未加载':'加载覆盖待核对'}</td></tr>`).join('')}</tbody></table></div><p>每张工作表的完整性目前均未知。请保留原文件并核对关键内容。</p></details>`;
+}
 export function buildHtmlFile(doc) {
   validateDocument(doc);
   if(!['document','sheet'].includes(doc.kind))throw Error('HTML_KIND_UNSUPPORTED');
   const ctx={warnings:new Set(),styles:new Map(),headings:[],images:0,missing:0,tables:0,sheets:0,positions:0,merges:0};
   if(doc.issues.some(x=>x.count>0))warn(ctx,'源文件采集尚有未确认项；HTML 只能保留已取得的内容，不能补回未加载的资源。');
+  const sheetAudit=doc.kind==='sheet'?buildSheetAudit(doc.provenance.capture):null;
+  if(doc.kind==='sheet'&&doc.provenance.capture&&!sheetAudit)warn(ctx,'采集快照无法生成逐表检查，工作表完整性仍待核对。');
+  if(sheetAudit)warn(ctx,'工作表加载完整性未知，请展开采集检查；有数据或样式不代表已经完整读取。');
   const body=doc.kind==='sheet'?workbookHtml(doc,ctx):documentNode(doc.content,ctx);
   const warnings=[...ctx.warnings];
   const notice=warnings.length?`<aside class="warning" role="note"><strong>保存范围与待核对项</strong><ul>${warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></aside>`:'';
   const toc=ctx.headings.length?`<nav aria-label="目录">${ctx.headings.map(h=>`<a href="#${h.id}">${esc(h.text)}</a>`).join('')}</nav>`:'';
-  const html=`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"><meta name="generator" content="LocalDocs HTML"><title>${esc(doc.title)}</title><style>${css}\n${[...ctx.styles].map(([value,name])=>`.${name}{${value}}`).join('\n')}</style></head><body><header><h1>${esc(doc.title)}</h1><p class="meta">离线阅读副本 · 内容更新于 ${esc(doc.updatedAt)} · 使用本机字体</p>${notice}</header>${toc}<main>${body}</main></body></html>`;
+  const html=`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"><meta name="generator" content="LocalDocs HTML"><title>${esc(doc.title)}</title><style>${css}\n${[...ctx.styles].map(([value,name])=>`.${name}{${value}}`).join('\n')}</style></head><body><header><h1>${esc(doc.title)}</h1><p class="meta">离线阅读副本 · 内容更新于 ${esc(doc.updatedAt)} · 使用本机字体</p>${notice}${sheetAuditHtml(sheetAudit)}</header>${toc}<main>${body}</main></body></html>`;
   if(new TextEncoder().encode(html).byteLength>MAX_FILE_BYTES)throw Error('HTML_TOO_LARGE');
   return {html,name:safeFileName(doc.title).replace(/\.localdoc$/,'.html'),warnings,stats:{images:ctx.images,missing:ctx.missing,tables:ctx.tables,sheets:ctx.sheets,positions:ctx.positions,merges:ctx.merges}};
 }
